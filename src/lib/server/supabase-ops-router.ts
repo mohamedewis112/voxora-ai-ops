@@ -102,11 +102,6 @@ async function getListing(id:string) { return (await rows(`listings?select=*&id=
 function canAccessLead(actor:VoxoraActor, lead:Row|null) {
   return !!lead && (actor.type==="admin" || lead.assigned_agent_id===actor.id);
 }
-async function ownLeadIds(actor:VoxoraActor) {
-  if(actor.type==="admin") return null;
-  const mine=await rows(`voxora_leads?select=id&assigned_agent_id=eq.${qs(actor.id)}&limit=5000`);
-  return new Set<string>(mine.map(x=>x.id));
-}
 
 export async function handleSupabaseOpsGet(path:string[], req:Request, actor:VoxoraActor):Promise<Response> {
   const url=new URL(req.url); const q=(url.searchParams.get("q")||"").trim().toLowerCase();
@@ -189,6 +184,12 @@ export async function handleSupabaseOpsGet(path:string[], req:Request, actor:Vox
       followups:followups.map(f=>({id:f.id,leadId:f.lead_id,scheduledAt:f.scheduled_at,reason:f.reason,assigneeId:f.assignee_id,priority:f.priority,status:f.status,createdAt:f.created_at,completedAt:f.completed_at})),
       listing:linkedListings[0]||null,listings:linkedListings,user:profiles[0]?{id:profiles[0].user_id,fullName:profiles[0].full_name||profiles[0].name||"",isRegistered:true,normalizedPhone:canonPhone(profiles[0].phone)}:null,
       botItem:bot[0]?{id:bot[0].id,leadId:bot[0].lead_id,status:bot[0].status,priority:bot[0].priority,attempts:bot[0].attempts,scheduledAt:bot[0].scheduled_at,lastResult:bot[0].last_result,addedAt:bot[0].added_at,startedAt:bot[0].started_at,finishedAt:bot[0].finished_at}:null});
+  }
+  if(path[0]==="leads"&&path[1]&&path[2]==="link-candidates"){
+    const lead=await getLead(path[1]); if(!lead)return err("lead_not_found",404); if(!canAccessLead(actor,lead))return err("forbidden",403);
+    const list=await rows("listings?select=id,name,phone,main_category,category,owner_id,user_id,is_claimed,is_deleted,deleted_at&owner_id=is.null&user_id=is.null&is_claimed=eq.false&is_deleted=eq.false&deleted_at=is.null&limit=5000");
+    const matched=list.filter(l=>canonPhone(l.phone)===lead.normalized_phone).slice(0,30);
+    return ok(matched.map(l=>({id:l.id,businessName:l.name||"",normalizedPhone:canonPhone(l.phone),category:l.main_category||l.category||null,leadId:lead.id})));
   }
   if(path[0]==="lookup"){
     const n=normalizePhone(url.searchParams.get("phone")||""); if(!n.ok)return err("invalid_phone");

@@ -36,11 +36,12 @@ yarn-error.log*
 # vercel
 .vercel
 
-
 # typescript
 *.tsbuildinfo
 next-env.d.ts
 local-*
+!local-stack/
+!local-stack/**
 .claude
 .z-ai-config
 *.log

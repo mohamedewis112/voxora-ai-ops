@@ -7,7 +7,6 @@ import { useUiStore, type ViewKey } from "@/stores/ui-store";
 import { DesktopSidebar } from "./sidebar";
 import { Footer, Header } from "./header";
 import { LoginView, ForgotPasswordView } from "./auth/auth-views";
-import { SettingsView } from "./settings/settings-view";
 import { AccountView } from "./account-view";
 import { FollowUpsView } from "./followups/followups-view";
 import { SalesWorkspaceView } from "./ops/sales-workspace-view";
@@ -15,13 +14,11 @@ import { PipelineView } from "./ops/pipeline-view";
 import { UnclaimedView } from "./ops/unclaimed-view";
 import { MergeReviewView } from "./ops/merge-review-view";
 import { WhatsAppView } from "./ops/whatsapp-view";
-import { PerformanceView } from "./ops/performance-view";
-import { AuditView } from "./ops/audit-view";
 
 const SALES_VIEWS: ViewKey[] = ["sales", "followups", "whatsapp", "account", "login", "forgot"];
 const ADMIN_VIEWS: ViewKey[] = [
   "sales", "pipeline", "unclaimed", "merge-review", "whatsapp",
-  "performance", "audit", "followups", "settings", "account", "login", "forgot",
+  "followups", "account", "login", "forgot",
 ];
 
 function Splash() {
@@ -114,9 +111,6 @@ function renderView(view: ViewKey, isSales: boolean) {
       case "pipeline": return <PipelineView />;
       case "unclaimed": return <UnclaimedView />;
       case "merge-review": return <MergeReviewView />;
-      case "performance": return <PerformanceView />;
-      case "audit": return <AuditView />;
-      case "settings": return <SettingsView />;
       default: return <SalesWorkspaceView />;
     }
   }

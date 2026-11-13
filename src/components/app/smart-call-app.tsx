@@ -6,7 +6,7 @@ import { ensureDemoData } from "@/stores/data-store";
 import { useUiStore, type ViewKey } from "@/stores/ui-store";
 import { DesktopSidebar } from "./sidebar";
 import { Footer, Header } from "./header";
-import { LoginView, ForgotPasswordView } from "./auth/auth-views";
+import { LoginView } from "./auth/auth-views";
 import { AccountView } from "./account-view";
 import { FollowUpsView } from "./followups/followups-view";
 import { SalesWorkspaceView } from "./ops/sales-workspace-view";
@@ -15,10 +15,10 @@ import { UnclaimedView } from "./ops/unclaimed-view";
 import { MergeReviewView } from "./ops/merge-review-view";
 import { WhatsAppView } from "./ops/whatsapp-view";
 
-const SALES_VIEWS: ViewKey[] = ["sales", "account", "login", "forgot"];
+const SALES_VIEWS: ViewKey[] = ["sales", "account", "login"];
 const ADMIN_VIEWS: ViewKey[] = [
   "sales", "pipeline", "unclaimed", "merge-review", "whatsapp",
-  "followups", "account", "login", "forgot",
+  "followups", "account", "login",
 ];
 
 function Splash() {
@@ -46,7 +46,7 @@ export function SmartCallApp() {
           const res = await fetch("/api/auth/session", { cache: "no-store" });
           const payload = await res.json();
           if (!cancelled && res.ok && payload.ok) {
-            login({ name: payload.data.name, role: payload.data.role });
+            login({ name: payload.data.name, email: payload.data.email, role: payload.data.role });
             if (payload.data.role === "sales_agent") setView("sales");
           } else if (!cancelled) logout();
         } catch { if (!cancelled) logout(); }
@@ -80,7 +80,6 @@ export function SmartCallApp() {
 
   if (!ready) return <Splash />;
   if (!authed || view === "login") return <LoginView />;
-  if (view === "forgot") return <ForgotPasswordView />;
 
   return (
     <div className="flex min-h-screen flex-col bg-background">

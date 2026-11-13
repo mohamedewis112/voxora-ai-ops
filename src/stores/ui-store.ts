@@ -52,7 +52,7 @@ interface UiState {
 export const useUiStore = create<UiState>()(
   persist(
     (set) => ({
-      view: "dashboard",
+      view: "sales",
       setView: (view) => set({ view }),
       authed: false,
       account: { name: "أحمد المصري", email: "admin@voxora.ai", role: "admin" },

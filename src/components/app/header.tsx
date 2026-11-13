@@ -47,7 +47,7 @@ interface OpsNotif {
   createdAt: string;
 }
 
-const NOTIF_ICON: Record<string, typeof Sparkles> = {
+const NOTIF_ICON: Record<string, typeof Info> = {
   success: BadgeCheck,
   info: Info,
   warning: CalIcon,

@@ -15,7 +15,7 @@ import { UnclaimedView } from "./ops/unclaimed-view";
 import { MergeReviewView } from "./ops/merge-review-view";
 import { WhatsAppView } from "./ops/whatsapp-view";
 
-const SALES_VIEWS: ViewKey[] = ["sales", "followups", "whatsapp", "account", "login", "forgot"];
+const SALES_VIEWS: ViewKey[] = ["sales", "account", "login", "forgot"];
 const ADMIN_VIEWS: ViewKey[] = [
   "sales", "pipeline", "unclaimed", "merge-review", "whatsapp",
   "followups", "account", "login", "forgot",

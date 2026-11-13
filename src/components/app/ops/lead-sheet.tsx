@@ -44,12 +44,12 @@ interface LeadDetail {
   botItem: { id: string; status: string; lastResult: string | null } | null;
 }
 
-interface UnclaimedRow {
-  id: string;
-  businessName: string;
+interface UserSearchResult {
+  userId: string;
+  fullName: string;
+  phone: string;
   normalizedPhone: string;
-  category: string | null;
-  leadId: string | null;
+  email: string | null;
 }
 
 const STATUS_TONE: Record<string, string> = {
@@ -89,8 +89,10 @@ export function LeadSheet() {
   const [waBody, setWaBody] = useState("");
   const [noteBody, setNoteBody] = useState("");
   const [linkOpen, setLinkOpen] = useState(false);
-  const [linkListingId, setLinkListingId] = useState("");
-  const [unclaimed, setUnclaimed] = useState<UnclaimedRow[]>([]);
+  const [linkPhone, setLinkPhone] = useState("");
+  const [linkUsers, setLinkUsers] = useState<UserSearchResult[]>([]);
+  const [selectedLinkUser, setSelectedLinkUser] = useState<string>("");
+  const [linkSearching, setLinkSearching] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmStatus, setConfirmStatus] = useState<"closed_business" | "invalid_phone">("closed_business");
   const [confirmReason, setConfirmReason] = useState("");
@@ -144,14 +146,26 @@ export function LeadSheet() {
 
   const lead = detail?.lead;
 
-  const openLinkDialog = async () => {
+  const openLinkDialog = () => {
+    setLinkPhone("");
+    setLinkUsers([]);
+    setSelectedLinkUser("");
     setLinkOpen(true);
+  };
+
+  const searchLinkUser = async () => {
+    if (!lead?.id || !linkPhone.trim()) return;
+    setLinkSearching(true);
     try {
-      if (!lead?.id) return;
-      const rows = await opsGet<UnclaimedRow[]>(`leads/${lead.id}/link-candidates`);
-      setUnclaimed(rows.slice(0, 30));
-    } catch {
-      setUnclaimed([]);
+      const rows = await opsGet<UserSearchResult[]>(`leads/${lead.id}/user-search`, { phone: linkPhone.trim() });
+      setLinkUsers(rows);
+      setSelectedLinkUser(rows.length === 1 ? rows[0].userId : "");
+      if (rows.length === 0) toast.info("لم يتم العثور على مستخدم بهذا الرقم");
+    } catch (e) {
+      setLinkUsers([]);
+      toast.error(e instanceof Error ? e.message : "تعذر البحث عن المستخدم");
+    } finally {
+      setLinkSearching(false);
     }
   };
 
@@ -423,43 +437,88 @@ export function LeadSheet() {
           </DialogContent>
         </Dialog>
 
-        {/* ---- Link owner ---- */}
+        {/* ---- Link owner by registered user's phone ---- */}
         <Dialog open={linkOpen} onOpenChange={setLinkOpen}>
           <DialogContent className="sm:max-w-[520px]">
             <DialogHeader>
               <DialogTitle>{t("sales.linkOwner")}</DialogTitle>
-              <DialogDescription>{t("sales.linkOwnerDesc")}</DialogDescription>
+              <DialogDescription>
+                ابحثي برقم هاتف المستخدم المسجل في دليلي ثم اختاري الحساب الصحيح لربط النشاط به.
+              </DialogDescription>
             </DialogHeader>
-            <div className="sc-scroll max-h-[50vh] space-y-2 overflow-y-auto">
-              {unclaimed.map((r) => (
-                <button
-                  key={r.id}
-                  type="button"
-                  onClick={() => setLinkListingId(r.id)}
-                  className={cn(
-                    "flex w-full items-center justify-between gap-3 rounded-lg border p-3 text-start text-sm transition-colors",
-                    linkListingId === r.id ? "border-primary/60 bg-primary/5" : "border-border/70 hover:border-primary/30"
-                  )}
-                >
-                  <span className="min-w-0">
-                    <span className="block truncate font-medium">{r.businessName}</span>
-                    <span className="block text-xs text-muted-foreground" dir="ltr">{r.normalizedPhone}</span>
-                  </span>
-                  {r.category && <Badge variant="outline" className="shrink-0">{r.category}</Badge>}
-                </button>
-              ))}
-              {unclaimed.length === 0 && (
-                <p className="py-6 text-center text-sm text-muted-foreground">{t("common.noData")}</p>
-              )}
+
+            <div className="space-y-3">
+              <div className="rounded-lg border border-border/70 bg-muted/30 p-3 text-sm">
+                <span className="text-xs text-muted-foreground">النشاط</span>
+                <p className="mt-1 font-medium">{detail?.listing?.businessName || lead?.businessName || "—"}</p>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="owner-user-phone">رقم هاتف المستخدم</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="owner-user-phone"
+                    dir="ltr"
+                    inputMode="tel"
+                    value={linkPhone}
+                    onChange={(e) => setLinkPhone(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        void searchLinkUser();
+                      }
+                    }}
+                    placeholder="010... أو +2010... أو 02..."
+                  />
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    disabled={!linkPhone.trim() || linkSearching}
+                    onClick={() => void searchLinkUser()}
+                  >
+                    {linkSearching ? <Loader2 className="size-4 animate-spin" /> : "بحث"}
+                  </Button>
+                </div>
+              </div>
+
+              <div className="sc-scroll max-h-[280px] space-y-2 overflow-y-auto">
+                {linkUsers.map((u) => (
+                  <button
+                    key={u.userId}
+                    type="button"
+                    onClick={() => setSelectedLinkUser(u.userId)}
+                    className={cn(
+                      "flex w-full items-start justify-between gap-3 rounded-lg border p-3 text-start transition-colors",
+                      selectedLinkUser === u.userId
+                        ? "border-primary/60 bg-primary/5"
+                        : "border-border/70 hover:border-primary/30"
+                    )}
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-medium">{u.fullName || "مستخدم دليلي"}</span>
+                      <span className="mt-0.5 block font-mono text-xs text-muted-foreground" dir="ltr">{u.phone}</span>
+                      {u.email && <span className="mt-0.5 block truncate text-[11px] text-muted-foreground" dir="ltr">{u.email}</span>}
+                    </span>
+                    {selectedLinkUser === u.userId && <BadgeCheck className="mt-0.5 size-4 shrink-0 text-emerald-500" />}
+                  </button>
+                ))}
+              </div>
             </div>
+
             <DialogFooter>
               <Button variant="ghost" onClick={() => setLinkOpen(false)}>{t("ops.cancel")}</Button>
               <Button
-                disabled={!linkListingId || busy}
+                disabled={!selectedLinkUser || !detail?.listing?.id || busy}
                 onClick={() => {
+                  const listingId = detail?.listing?.id;
+                  if (!listingId || !selectedLinkUser) return;
                   setLinkOpen(false);
                   act(
-                    () => opsPost(`leads/${lead!.id}/link-owner`, { listingId: linkListingId, userId: null, reason: "ربط يدوي بواسطة المبيعات" }),
+                    () => opsPost(`leads/${lead!.id}/link-owner`, {
+                      listingId,
+                      userId: selectedLinkUser,
+                      reason: "ربط يدوي بواسطة المبيعات بعد البحث برقم المستخدم",
+                    }),
                     "unclaimed.linkedToast"
                   );
                 }}

@@ -828,7 +828,7 @@ const DICT: Record<string, Entry> = {
   "sales.scheduleCallback": ["جدولة رجوع", "Schedule callback"],
   "sales.callbackDate": ["تاريخ ووقت الرجوع", "Callback date & time"],
   "sales.callbackReason": ["سبب الرجوع", "Callback reason"],
-  "sales.sendWhatsapp": ["إرسال متابعة واتساب", "Send WhatsApp follow-up"],
+  "sales.sendWhatsapp": ["فتح واتساب للمتابعة", "Open WhatsApp follow-up"],
   "sales.whatsappBody": ["نص رسالة المتابعة", "Follow-up message body"],
   "sales.addToBot": ["إضافة إلى البوت", "Add to AI Bot"],
   "sales.addedToBot": ["تمت الإضافة إلى طابور البوت — ملكية المبيعات محفوظة", "Added to bot queue — sales ownership preserved"],
@@ -964,7 +964,7 @@ const DICT: Record<string, Entry> = {
   "wa.salesOwner": ["موظف المبيعات", "Sales owner"],
   "wa.linkedLead": ["العميل المرتبط", "Linked lead"],
   "wa.empty": ["لا توجد محادثات بعد", "No threads yet"],
-  "wa.sentToast": ["تم إرسال رسالة واتساب (وضع المحاكاة)", "WhatsApp message sent (simulation)"],
+  "wa.sentToast": ["تم تسجيل المتابعة وفتح واتساب", "Follow-up logged and WhatsApp opened"],
 
   /* performance */
   "perf.desc": ["مقارنة أداء فريق المبيعات مع AI Bot", "Compare sales team performance against the AI Bot"],

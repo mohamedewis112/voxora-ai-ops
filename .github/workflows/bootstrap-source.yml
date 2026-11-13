@@ -4,8 +4,10 @@ on:
     branches: [feat/full-ops-integration]
     paths: [".github/workflows/bootstrap-source.yml"]
   workflow_dispatch:
+
 permissions:
   contents: write
+
 jobs:
   bootstrap:
     runs-on: ubuntu-latest
@@ -14,32 +16,99 @@ jobs:
         with:
           ref: feat/full-ops-integration
           fetch-depth: 0
-      - name: Inspect Firestorage API bundle
+
+      - name: Download and verify source archive
         env:
-          SHARE_URL: https://firestorage.ai/ja/f/dv8eY4qY9Qm8
+          API_BASE: https://api.firestorage.ai/dev/file
+          SHARE_ID: dv8eY4qY9Qm8
+          FILE_ID: 01a1d52e8cd177c7aaf0cfcc1e554a98
+          EXPECTED_SHA256: c7c2af61fe9e53e5f79cc8229b3d62a079aa809cc73a8d84d688e22743d75719
         run: |
           set -euo pipefail
           python3 - <<'PY'
-          import html,re,urllib.request
-          from urllib.parse import urljoin
-          share="https://firestorage.ai/ja/f/dv8eY4qY9Qm8"
-          def get(u):
-              req=urllib.request.Request(u,headers={"User-Agent":"Mozilla/5.0"})
-              return urllib.request.urlopen(req,timeout=25).read().decode("utf-8","ignore")
-          page=get(share)
-          js=[urljoin(share,x) for x in re.findall(r'(?:src|href)=["\']([^"\']+\.js[^"\']*)["\']',page,re.I)]
-          print("JS",len(js))
-          for u in js:
-              try: t=get(u)
-              except Exception: continue
-              needle="/files?maxResults=1000"
-              i=t.find(needle)
-              if i>=0:
-                  print("FOUND",u)
-                  print(t[max(0,i-6000):min(len(t),i+4000)])
-                  print("URLS")
-                  for x in sorted(set(re.findall(r'https?://[^"\'\\ ]+',t))):
-                      print(x[:500])
-                  break
+          import hashlib, json, os, sys
+          from pathlib import Path
+          from urllib.request import Request, urlopen
+
+          base=os.environ["API_BASE"].rstrip("/")
+          share=os.environ["SHARE_ID"]
+          wanted=os.environ["FILE_ID"]
+          expected=os.environ["EXPECTED_SHA256"].lower()
+          ua="Mozilla/5.0 VoxoraBootstrap/1.0"
+
+          def request(url, method="GET", body=None):
+              data=None if body is None else json.dumps(body).encode()
+              headers={"User-Agent":ua,"Accept":"application/json,*/*"}
+              if data is not None: headers["Content-Type"]="application/json"
+              req=Request(url,data=data,method=method,headers=headers)
+              with urlopen(req,timeout=30) as r:
+                  return r.geturl(),dict(r.headers),r.read()
+
+          files_url=f"{base}/shares/{share}/files?maxResults=1000"
+          _,_,raw=request(files_url)
+          payload=json.loads(raw)
+          files=payload.get("files") or []
+          item=next((x for x in files if str(x.get("fileId") or x.get("file_id") or x.get("id"))==wanted),None)
+          if not item:
+              item=next((x for x in files if (x.get("fileName") or x.get("file_name") or x.get("name"))=="voxora-ai-ops-final.zip"),None)
+          if not item:
+              print("Available files:",[(x.get("fileId") or x.get("id"),x.get("fileName") or x.get("name")) for x in files])
+              raise SystemExit("source file not found in share")
+          file_id=str(item.get("fileId") or item.get("file_id") or item.get("id"))
+          print("Resolved source file:",file_id,item.get("fileName") or item.get("name"))
+
+          dl_url=f"{base}/shares/{share}/files/{file_id}/download"
+          _,_,dl_raw=request(dl_url,method="POST")
+          try:
+              dl=json.loads(dl_raw)
+          except Exception:
+              dl={}
+          candidates=[]
+          def walk(v):
+              if isinstance(v,str) and v.startswith("http"): candidates.append(v)
+              elif isinstance(v,dict):
+                  for vv in v.values(): walk(vv)
+              elif isinstance(v,list):
+                  for vv in v: walk(vv)
+          walk(dl)
+          if not candidates:
+              raise SystemExit("download endpoint did not return a signed URL")
+          signed=candidates[0]
+
+          req=Request(signed,headers={"User-Agent":ua})
+          with urlopen(req,timeout=60) as r:
+              data=r.read()
+          digest=hashlib.sha256(data).hexdigest()
+          print("Downloaded:",len(data),"bytes; sha256:",digest)
+          if digest.lower()!=expected:
+              raise SystemExit("archive hash mismatch")
+          if data[:2]!=b"PK":
+              raise SystemExit("download is not a ZIP")
+          Path("/tmp/voxora-source.zip").write_bytes(data)
           PY
-          exit 2
+
+      - name: Validate archive contents
+        run: |
+          python3 - <<'PY'
+          import zipfile
+          with zipfile.ZipFile("/tmp/voxora-source.zip") as z:
+              names=set(z.namelist())
+              for required in ["package.json","src/app/page.tsx","src/lib/server/supabase-ops-router.ts","local-stack/telephony-bridge.mjs"]:
+                  assert required in names, f"missing {required}"
+              forbidden=[n for n in names if n==".env" or n.endswith("/.env")]
+              assert not forbidden, f"secret env files found: {forbidden}"
+          print("Archive structure verified")
+          PY
+
+      - name: Replace bootstrap files with full source
+        run: |
+          set -euo pipefail
+          rm -rf .bootstrap
+          find . -mindepth 1 -maxdepth 1 ! -name .git ! -name .github -exec rm -rf {} +
+          unzip -q /tmp/voxora-source.zip -d .
+          rm -f .github/workflows/bootstrap-source.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "feat: integrate Voxora AI Ops production source"
+          git push origin HEAD:feat/full-ops-integration

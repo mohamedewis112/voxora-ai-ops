@@ -8,8 +8,8 @@
  */
 import { useEffect, useMemo, useState } from "react";
 import {
-  Bot, CalendarClock, Link2, MessageCircle, PhoneCall, StickyNote, UserRound,
-  ShieldAlert, Building2, BadgeCheck, ArrowLeftRight, Loader2,
+  CalendarClock, Link2, MessageCircle, PhoneCall, StickyNote, UserRound,
+  ShieldAlert, Building2, BadgeCheck, Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useI18n } from "@/lib/i18n";
@@ -75,7 +75,6 @@ function dtLocal(iso: string): string {
 
 export function LeadSheet() {
   const { t } = useI18n();
-  const setView = useUiStore((s) => s.setView);
   const selectedLeadId = useOpsUiStore((s) => s.selectedLeadId);
   const clearLead = useOpsUiStore((s) => s.clearLead);
   const open = !!selectedLeadId;
@@ -90,12 +89,9 @@ export function LeadSheet() {
   const [waOpen, setWaOpen] = useState(false);
   const [waBody, setWaBody] = useState("");
   const [noteBody, setNoteBody] = useState("");
-  const [transferOpen, setTransferOpen] = useState(false);
-  const [transferTo, setTransferTo] = useState("");
   const [linkOpen, setLinkOpen] = useState(false);
   const [linkListingId, setLinkListingId] = useState("");
   const [unclaimed, setUnclaimed] = useState<UnclaimedRow[]>([]);
-  const [agents, setAgents] = useState<{ id: string; name: string; status: string; role: string }[]>([]);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmStatus, setConfirmStatus] = useState<"closed_business" | "invalid_phone">("closed_business");
   const [confirmReason, setConfirmReason] = useState("");
@@ -152,20 +148,11 @@ export function LeadSheet() {
   const openLinkDialog = async () => {
     setLinkOpen(true);
     try {
-      const rows = await opsGet<UnclaimedRow[]>("unclaimed", { status: "unclaimed" });
-      setUnclaimed(rows.filter((r) => r.leadId === lead?.id || !r.leadId).slice(0, 30));
+      if (!lead?.id) return;
+      const rows = await opsGet<UnclaimedRow[]>(`leads/${lead.id}/link-candidates`);
+      setUnclaimed(rows.slice(0, 30));
     } catch {
       setUnclaimed([]);
-    }
-  };
-
-  const openTransferDialog = async () => {
-    setTransferOpen(true);
-    try {
-      const rows = await opsGet<{ id: string; name: string; status: string; role: string }[]>("agents");
-      setAgents(rows.filter((a) => a.status === "active" && a.id !== lead?.assignedAgentId));
-    } catch {
-      setAgents([]);
     }
   };
 
@@ -234,20 +221,8 @@ export function LeadSheet() {
               <Button size="sm" variant="outline" className="h-8" onClick={() => setWaOpen(true)} disabled={busy}>
                 <MessageCircle className="size-3.5" aria-hidden="true" /> {t("sales.sendWhatsapp")}
               </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-8"
-                disabled={busy || lead.botStatus === "queued" || lead.botStatus === "running"}
-                onClick={() => act(() => opsPost(`leads/${lead.id}/bot`, {}), "sales.addedToBot")}
-              >
-                <Bot className="size-3.5 text-violet-400" aria-hidden="true" /> {t("sales.addToBot")}
-              </Button>
               <Button size="sm" variant="outline" className="h-8" onClick={openLinkDialog} disabled={busy}>
                 <Link2 className="size-3.5" aria-hidden="true" /> {t("sales.linkOwner")}
-              </Button>
-              <Button size="sm" variant="outline" className="h-8" onClick={openTransferDialog} disabled={busy}>
-                <ArrowLeftRight className="size-3.5" aria-hidden="true" /> {t("sales.transferLead")}
               </Button>
               {lead.listingId && (
                 <Button
@@ -446,35 +421,6 @@ export function LeadSheet() {
           </DialogContent>
         </Dialog>
 
-        {/* ---- Transfer ---- */}
-        <Dialog open={transferOpen} onOpenChange={setTransferOpen}>
-          <DialogContent className="sm:max-w-[400px]">
-            <DialogHeader>
-              <DialogTitle>{t("sales.transferLead")}</DialogTitle>
-            </DialogHeader>
-            <Select value={transferTo} onValueChange={setTransferTo}>
-              <SelectTrigger><SelectValue placeholder={t("sales.transferTo")} /></SelectTrigger>
-              <SelectContent>
-                {agents.map((a) => (
-                  <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <DialogFooter>
-              <Button variant="ghost" onClick={() => setTransferOpen(false)}>{t("ops.cancel")}</Button>
-              <Button
-                disabled={!transferTo || busy}
-                onClick={() => {
-                  setTransferOpen(false);
-                  act(() => opsPost(`leads/${lead!.id}/transfer`, { toAgentId: transferTo }), "sales.markOutcomeToast");
-                }}
-              >
-                {t("ops.confirm")}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
         {/* ---- Link owner ---- */}
         <Dialog open={linkOpen} onOpenChange={setLinkOpen}>
           <DialogContent className="sm:max-w-[520px]">
@@ -563,7 +509,7 @@ export function LeadSheet() {
                   setConfirmOpen(false);
                   act(
                     () => opsPost(`leads/${lead!.id}/confirm-business-status`, {
-                      listingStatus: confirmStatus, reason: confirmReason, confidence: confirmConf,
+                      status: confirmStatus, reason: confirmReason, confidence: confirmConf,
                     }),
                     "sales.markOutcomeToast"
                   );

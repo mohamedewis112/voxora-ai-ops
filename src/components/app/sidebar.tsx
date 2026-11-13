@@ -2,13 +2,10 @@
 
 import Image from "next/image";
 import {
-  BarChart3,
   CalendarClock,
   GitBranch,
   MessageCircle,
   Scale,
-  ScrollText,
-  Settings,
   Store,
   UserRound,
   UserCheck,
@@ -77,10 +74,7 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
     ["unclaimed", Store, t("nav.unclaimed")],
     ["merge-review", Scale, t("nav.mergeReview")],
     ["whatsapp", MessageCircle, t("nav.whatsapp")],
-    ["performance", BarChart3, t("nav.performance")],
-    ["audit", ScrollText, t("nav.audit")],
     ["followups", CalendarClock, t("nav.followups")],
-    ["settings", Settings, t("nav.settings")],
   ];
 
   const items = isSales ? SALES : ADMIN;

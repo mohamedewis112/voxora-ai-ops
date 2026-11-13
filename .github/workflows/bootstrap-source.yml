@@ -2,10 +2,8 @@ name: Bootstrap Voxora source
 
 on:
   push:
-    branches:
-      - feat/full-ops-integration
-    paths:
-      - ".github/workflows/bootstrap-source.yml"
+    branches: [feat/full-ops-integration]
+    paths: [".github/workflows/bootstrap-source.yml"]
   workflow_dispatch:
 
 permissions:
@@ -15,158 +13,67 @@ jobs:
   bootstrap:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout integration branch
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           ref: feat/full-ops-integration
           fetch-depth: 0
 
-      - name: Download verified source archive
+      - name: Discover Firestorage download endpoint
         env:
           SHARE_URL: https://firestorage.ai/ja/f/Kv7G0bi0bdHd
           FILE_ID: 01a1d51fecbf702aa3c4c2dbd75c09e7
           PUBLIC_ID: nftEiw4hcTBsuEd3
           SHARE_ID: Kv7G0bi0bdHd
-          EXPECTED_SHA256: c7c2af61fe9e53e5f79cc8229b3d62a079aa809cc73a8d84d688e22743d75719
+          FILE_NAME: voxora-ai-ops-bootstrap.zip
         run: |
           python3 - <<'PY'
-          import hashlib, html, json, os, re, sys
-          from html.parser import HTMLParser
-          from pathlib import Path
+          import html, os, re
           from urllib.parse import urljoin, urlparse
           from urllib.request import Request, urlopen
 
-          share = os.environ["SHARE_URL"]
-          file_id = os.environ["FILE_ID"]
-          public_id = os.environ["PUBLIC_ID"]
-          share_id = os.environ["SHARE_ID"]
-          expected = os.environ["EXPECTED_SHA256"].lower()
-          ua = "Mozilla/5.0 VoxoraBootstrap/1.0"
-
-          def fetch(url, timeout=25):
-              req = Request(url, headers={"User-Agent": ua, "Accept": "*/*"})
-              with urlopen(req, timeout=timeout) as r:
-                  data = r.read()
-                  return r.geturl(), dict(r.headers), data
-
-          def valid_zip(data):
-              return data[:4] == b"PK\x03\x04" and hashlib.sha256(data).hexdigest().lower() == expected
-
-          candidates = [
-              share,
-              share + "?download=1",
-              share + "?dl=1",
-              share.rstrip("/") + "/download",
-              f"https://firestorage.ai/api/files/{file_id}/download",
-              f"https://firestorage.ai/api/file/{file_id}/download",
-              f"https://firestorage.ai/api/download/{file_id}",
-              f"https://firestorage.ai/api/public/files/{file_id}/download",
-              f"https://firestorage.ai/api/public/file/{file_id}/download",
-              f"https://firestorage.ai/download/{public_id}",
-              f"https://firestorage.ai/api/download/{public_id}",
-              f"https://firestorage.ai/api/shares/{share_id}/download",
-              f"https://firestorage.ai/api/public/shares/{share_id}/download",
-          ]
-
-          seen = set()
-          page_texts = []
-
-          # First fetch the public share page and its same-origin JS assets.
-          try:
-              final_url, headers, data = fetch(share)
-              if valid_zip(data):
-                  Path("/tmp/voxora-source.zip").write_bytes(data)
-                  print("Share URL returned the verified ZIP directly.")
-                  sys.exit(0)
-              text = data.decode("utf-8", "ignore")
-              page_texts.append((final_url, text))
-              for raw in re.findall(r'''(?:src|href)=["']([^"']+)["']''', text, re.I):
-                  u = urljoin(final_url, html.unescape(raw))
-                  if urlparse(u).netloc == "firestorage.ai" and (".js" in u or "/api/" in u or "download" in u.lower()):
-                      candidates.append(u)
-              # Fetch a bounded number of JS assets and scan them for API/download URLs.
-              for u in list(candidates):
-                  if ".js" not in u:
-                      continue
-                  if u in seen:
-                      continue
-                  seen.add(u)
-                  try:
-                      fu, hh, dd = fetch(u, 15)
-                      if len(dd) > 3_000_000:
-                          continue
-                      page_texts.append((fu, dd.decode("utf-8", "ignore")))
-                  except Exception:
-                      pass
-          except Exception as e:
-              print("Initial share-page fetch failed:", repr(e))
-
-          # Discover likely URLs from HTML/JS source.
-          for base, text in page_texts:
-              patterns = [
-                  r'''https://firestorage\.ai[^"'\\\s<>]+''',
-                  r'''["'](/api/[^"'\\\s<>]+)["']''',
-                  r'''["'](/[^"'\\\s<>]*download[^"'\\\s<>]*)["']''',
-              ]
-              for pat in patterns:
-                  for m in re.findall(pat, text, re.I):
-                      if isinstance(m, tuple):
-                          m = m[0]
-                      candidates.append(urljoin(base, html.unescape(m).replace("\\u002F", "/")))
-              # Also look near our known IDs.
-              for needle in (file_id, public_id, share_id):
-                  for hit in re.finditer(re.escape(needle), text):
-                      s = max(0, hit.start()-400); e = min(len(text), hit.end()+400)
-                      frag = text[s:e]
-                      for raw in re.findall(r'''https?://[^"'\\\s<>]+|/api/[^"'\\\s<>]+|/[^"'\\\s<>]*download[^"'\\\s<>]*''', frag, re.I):
-                          candidates.append(urljoin(base, html.unescape(raw)))
-
-          # Try discovered URLs, but only accept the exact expected archive hash.
-          ordered = []
-          for u in candidates:
-              u = u.replace("\\/", "/")
-              if u not in ordered and u.startswith("http"):
-                  ordered.append(u)
-
-          print(f"Testing {len(ordered)} candidate download URLs")
-          for u in ordered[:120]:
+          share=os.environ["SHARE_URL"]
+          needles=["download","signed","publicId","public_id","fileId","file_id","shareId","share_id",
+                   os.environ["FILE_ID"],os.environ["PUBLIC_ID"],os.environ["SHARE_ID"],os.environ["FILE_NAME"]]
+          def get(u):
+              req=Request(u,headers={"User-Agent":"Mozilla/5.0","Accept":"*/*"})
+              with urlopen(req,timeout=20) as r:
+                  return r.geturl(),r.read().decode("utf-8","ignore")
+          final,page=get(share)
+          print("PAGE",final,"chars",len(page))
+          sources=[urljoin(final,html.unescape(x)) for x in re.findall(r'(?:src|href)=["\']([^"\']+)["\']',page,re.I)]
+          js=[u for u in sources if urlparse(u).netloc=="firestorage.ai" and ".js" in u]
+          docs=[("PAGE",final,page)]
+          for u in js:
               try:
-                  fu, headers, data = fetch(u, 20)
-                  if valid_zip(data):
-                      Path("/tmp/voxora-source.zip").write_bytes(data)
-                      print("Verified source archive downloaded from:", fu)
-                      sys.exit(0)
+                  fu,t=get(u)
+                  if len(t)<4_000_000:
+                      docs.append(("JS",fu,t))
               except Exception:
-                  continue
-
-          print("Could not discover a verified download URL from the public share.")
-          print("Candidate sample:")
-          for u in ordered[:30]:
-              print(" -", u)
-          sys.exit(2)
+                  pass
+          print("JS_COUNT",len(docs)-1)
+          found=set()
+          for kind,u,t in docs:
+              for pat in [
+                  r'https://firestorage\.ai[^"\'\\\s<>]+',
+                  r'["\'](/api/[^"\'\\\s<>]+)["\']',
+                  r'["\'](/[^"\'\\\s<>]*(?:download|signed)[^"\'\\\s<>]*)["\']'
+              ]:
+                  for m in re.findall(pat,t,re.I):
+                      if isinstance(m,tuple): m=m[0]
+                      found.add(urljoin(u,html.unescape(m).replace("\\/","/")))
+              low=t.lower()
+              for needle in needles:
+                  start=0
+                  n=needle.lower()
+                  shown=0
+                  while shown<4:
+                      i=low.find(n,start)
+                      if i<0: break
+                      frag=t[max(0,i-260):min(len(t),i+520)].replace("\n"," ")
+                      print("SNIP",kind,u,needle,repr(frag[:900]))
+                      start=i+len(n); shown+=1
+          print("CANDIDATES")
+          for u in sorted(found):
+              print(u)
           PY
-
-      - name: Extract source
-        run: |
-          python3 - <<'PY'
-          import hashlib, zipfile
-          from pathlib import Path
-          p=Path("/tmp/voxora-source.zip")
-          print("archive sha256:", hashlib.sha256(p.read_bytes()).hexdigest())
-          with zipfile.ZipFile(p) as z:
-              z.extractall(".")
-          PY
-          rm -rf .bootstrap
-          rm -f .github/workflows/bootstrap-source.yml
-
-      - name: Commit extracted source
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          if git diff --cached --quiet; then
-            echo "No source changes to commit."
-          else
-            git commit -m "feat: integrate Voxora AI Ops production source"
-            git push origin HEAD:feat/full-ops-integration
-          fi
+          exit 2

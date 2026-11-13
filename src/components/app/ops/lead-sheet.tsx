@@ -3,7 +3,7 @@
 /**
  * Voxora AI — lead detail sheet (unified CRM workspace actions).
  * Everything attaches to the SAME lead: outcomes, callbacks, WhatsApp, notes,
- * AI Bot hand-off (ownership preserved), manual owner linking, and documented
+ * manual owner linking and documented business-status confirmations.
  * business-status confirmations. Busy/no-answer NEVER change listing visibility.
  */
 import { useEffect, useMemo, useState } from "react";
@@ -13,7 +13,6 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useI18n } from "@/lib/i18n";
-import { useUiStore } from "@/stores/ui-store";
 import { useOpsUiStore } from "@/stores/ops-ui-store";
 import { notifyOpsChanged, opsGet, opsPost } from "@/hooks/use-ops";
 import { LeadTimeline } from "./lead-timeline";
@@ -410,6 +409,9 @@ export function LeadSheet() {
                 disabled={!waBody.trim() || busy}
                 onClick={() => {
                   const body = waBody;
+                  const digits = lead!.normalizedPhone.replace(/\D/g, "");
+                  const waNumber = digits.startsWith("0") ? `20${digits.slice(1)}` : digits;
+                  window.open(`https://wa.me/${waNumber}?text=${encodeURIComponent(body)}`, "_blank", "noopener,noreferrer");
                   setWaBody("");
                   setWaOpen(false);
                   act(() => opsPost(`leads/${lead!.id}/whatsapp-followup`, { body }), "wa.sentToast");

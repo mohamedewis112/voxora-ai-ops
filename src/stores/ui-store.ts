@@ -58,7 +58,10 @@ export const useUiStore = create<UiState>()(
       account: { name: "أحمد المصري", email: "admin@voxora.ai", role: "admin" },
       login: (acc) => set((s) => ({ authed: true, account: { ...s.account, ...acc } })),
       logout: () => set({ authed: false, view: "login" }),
-      updateAccount: (patch) => set((s) => ({ account: { ...s.account, ...patch } })),
+      updateAccount: (patch) => set((s) => {
+        const { role: _ignoredRole, ...safePatch } = patch;
+        return { account: { ...s.account, ...safePatch, role: s.account.role } };
+      }),
       callsSearch: "",
       contactsSearch: "",
       setCallsSearch: (callsSearch) => set({ callsSearch }),

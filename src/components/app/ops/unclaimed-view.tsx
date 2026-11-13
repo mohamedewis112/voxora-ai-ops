@@ -138,8 +138,11 @@ export function UnclaimedView() {
   // Reset dialog selection each time a row is opened for linking.
   useEffect(() => {
     if (!linkRow) return;
-    setSelectedIdx(linkRow.ownerCandidates.length > 0 ? 0 : null);
-    setLinking(false);
+    const timer = window.setTimeout(() => {
+      setSelectedIdx(linkRow.ownerCandidates.length > 0 ? 0 : null);
+      setLinking(false);
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [linkRow]);
 
   const linkCands = useMemo<OwnerCandidateDTO[]>(

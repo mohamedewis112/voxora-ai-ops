@@ -17,6 +17,7 @@ async function allowed(userId: string) {
 export async function POST(req: Request) {
   const c = serverRuntimeConfig();
   if (!c.daleelySupabaseUrl || !c.supabasePublishableKey) return Response.json({ ok: false, error: "auth_not_configured" }, { status: 503 });
+  if (!c.supabaseSecretKey) return Response.json({ ok: false, error: "ops_backend_not_configured" }, { status: 503 });
   const body = await req.json().catch(() => ({})) as { email?: string; password?: string };
   if (!body.email || !body.password) return Response.json({ ok: false, error: "missing_credentials" }, { status: 400 });
   const r = await fetch(`${c.daleelySupabaseUrl.replace(/\/$/, "")}/auth/v1/token?grant_type=password`, {

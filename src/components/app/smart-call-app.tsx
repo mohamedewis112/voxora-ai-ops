@@ -8,17 +8,17 @@ import { DesktopSidebar } from "./sidebar";
 import { Footer, Header } from "./header";
 import { LoginView } from "./auth/auth-views";
 import { AccountView } from "./account-view";
-import { FollowUpsView } from "./followups/followups-view";
 import { SalesWorkspaceView } from "./ops/sales-workspace-view";
+import { SalesFollowupsView } from "./ops/sales-followups-view";
 import { PipelineView } from "./ops/pipeline-view";
 import { UnclaimedView } from "./ops/unclaimed-view";
 import { MergeReviewView } from "./ops/merge-review-view";
 import { WhatsAppView } from "./ops/whatsapp-view";
 
-const SALES_VIEWS: ViewKey[] = ["sales", "account", "login"];
+const SALES_VIEWS: ViewKey[] = ["sales", "followups", "account", "login"];
 const ADMIN_VIEWS: ViewKey[] = [
   "sales", "pipeline", "unclaimed", "merge-review", "whatsapp",
-  "followups", "account", "login",
+  "account", "login",
 ];
 
 function Splash() {
@@ -101,7 +101,7 @@ export function SmartCallApp() {
 
 function renderView(view: ViewKey, isSales: boolean) {
   if (view === "account") return <AccountView />;
-  if (view === "followups") return <FollowUpsView />;
+  if (view === "followups") return isSales ? <SalesFollowupsView /> : <SalesWorkspaceView />;
   if (view === "whatsapp") return <WhatsAppView />;
   if (view === "sales") return <SalesWorkspaceView />;
 

@@ -60,7 +60,7 @@ export async function authorizeVoxoraRequest(req: Request): Promise<VoxoraActor 
     `voxora_sales_agents?select=id,daleely_user_id,name,role,status&daleely_user_id=eq.${encodeURIComponent(user.id)}&status=eq.active&limit=1`
   );
   if (agents[0]) {
-    return { userId: user.id, type: "sales_agent", id: agents[0].id, name: agents[0].name, role: agents[0].role };
+    return { userId: user.id, type: "sales_agent", id: agents[0].id, name: agents[0].name, role: "sales_agent" };
   }
   return null;
 }

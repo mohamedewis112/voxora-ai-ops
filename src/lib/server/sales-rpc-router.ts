@@ -87,6 +87,16 @@ export async function handleSalesRpcGet(path: string[], req: Request, actor: Vox
     }));
   }
 
+  if (path[0] === "leads" && path[1] && path[2] === "user-search") {
+    const phone = param(url, "phone", "");
+    if (!phone.trim()) return ok([]);
+    return ok(await rpc("voxora_sales_user_search", {
+      p_agent_id: actor.id,
+      p_lead_id: path[1],
+      p_phone: phone,
+    }));
+  }
+
   if (path[0] === "leads" && path[1] && path[2] === "link-candidates") {
     return ok(await rpc("voxora_sales_query", {
       p_agent_id: actor.id,
@@ -133,13 +143,26 @@ export async function handleSalesRpcPost(path: string[], req: Request, actor: Vo
   if (actor.type !== "sales_agent") return err("forbidden", 403);
   const body = await req.json().catch(() => ({})) as Json;
 
+  if (path[0] === "leads" && path[1] && path[2] === "link-owner") {
+    const listingId = typeof body.listingId === "string" ? body.listingId : "";
+    const userId = typeof body.userId === "string" ? body.userId : "";
+    const reason = typeof body.reason === "string" ? body.reason : "ربط يدوي بواسطة المبيعات";
+    if (!listingId || !userId) return err("missing_link_target", 400);
+    return ok(await rpc("voxora_sales_link_owner", {
+      p_agent_id: actor.id,
+      p_lead_id: path[1],
+      p_listing_id: listingId,
+      p_user_id: userId,
+      p_reason: reason,
+    }));
+  }
+
   if (path[0] === "leads" && path[1] && path[2]) {
     const allowed = new Set([
       "outcome",
       "notes",
       "callback",
       "whatsapp-followup",
-      "link-owner",
       "confirm-business-status",
       "followup-status",
     ]);

@@ -64,6 +64,7 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 
   const SALES: Array<[ViewKey, LucideIcon, string]> = [
     ["sales", UserCheck, "عملائي"],
+    ["followups", CalendarClock, "المتابعات"],
   ];
 
   const ADMIN: Array<[ViewKey, LucideIcon, string]> = [
@@ -72,7 +73,6 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
     ["unclaimed", Store, t("nav.unclaimed")],
     ["merge-review", Scale, t("nav.mergeReview")],
     ["whatsapp", MessageCircle, t("nav.whatsapp")],
-    ["followups", CalendarClock, t("nav.followups")],
   ];
 
   const items = isSales ? SALES : ADMIN;

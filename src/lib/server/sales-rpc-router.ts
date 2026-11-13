@@ -65,6 +65,17 @@ export async function handleSalesRpcGet(path: string[], req: Request, actor: Vox
     }));
   }
 
+  if (path[0] === "followups") {
+    return ok(await rpc("voxora_sales_query", {
+      p_agent_id: actor.id,
+      p_resource: "followups",
+      p_id: null,
+      p_status: param(url, "status", "all"),
+      p_prefix: "all",
+      p_q: "",
+    }));
+  }
+
   if (path[0] === "leads" && path[1] && path[2] === "detail") {
     return ok(await rpc("voxora_sales_query", {
       p_agent_id: actor.id,
@@ -130,6 +141,7 @@ export async function handleSalesRpcPost(path: string[], req: Request, actor: Vo
       "whatsapp-followup",
       "link-owner",
       "confirm-business-status",
+      "followup-status",
     ]);
     if (!allowed.has(path[2])) return err("forbidden", 403);
     return ok(await rpc("voxora_sales_action", {

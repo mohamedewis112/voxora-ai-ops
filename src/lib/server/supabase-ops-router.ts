@@ -172,11 +172,11 @@ export async function handleSupabaseOpsGet(path:string[], req:Request, actor:Vox
   }
   if(path[0]==="bot-queue"){
     const [items,leads]=await Promise.all([rows("voxora_bot_queue?select=*&order=priority.asc,added_at.asc&limit=5000"),rows("voxora_leads?select=*&limit=5000")]); const ctx=await context(); const map=new Map(leads.map(l=>[l.id,l]));
-    return ok(items.map(i=>({id:i.id,leadId:i.lead_id,status:i.status,priority:i.priority,attempts:i.attempts,scheduledAt:i.scheduled_at,lastResult:i.last_result,addedAt:i.added_at,startedAt:i.started_at,finishedAt:i.finished_at,lead:map.get(i.lead_id)?leadDTO(map.get(i.lead_id),ctx.agentNames,ctx.listingNames,ctx.registered):null}) satisfies BotQueueDTO));
+    return ok(items.map(i=>{const lead=map.get(i.lead_id);return ({id:i.id,leadId:i.lead_id,status:i.status,priority:i.priority,attempts:i.attempts,scheduledAt:i.scheduled_at,lastResult:i.last_result,addedAt:i.added_at,startedAt:i.started_at,finishedAt:i.finished_at,lead:lead?leadDTO(lead,ctx.agentNames,ctx.listingNames,ctx.registered):null}) satisfies BotQueueDTO;}));
   }
   if(path[0]==="whatsapp"&&path[1]==="threads"&&!path[2]){
     const [threads,msgs,leads]=await Promise.all([rows("voxora_whatsapp_threads?select=*&order=last_message_at.desc.nullslast&limit=5000"),rows("voxora_whatsapp_messages?select=*&order=created_at.desc&limit=10000"),rows("voxora_leads?select=*&limit=5000")]); const ctx=await context();const lm=new Map(leads.map(l=>[l.id,l]));
-    return ok(threads.map(t=>{const m=msgs.find(x=>x.thread_id===t.id);return {id:t.id,leadId:t.lead_id,phoneNormalized:t.phone_normalized,displayName:t.display_name,listingId:t.daleely_listing_id,lastMessageAt:t.last_message_at,unreadCount:t.unread_count,lastMessagePreview:m?.body||"",lastMessageStatus:m?.status||"",lead:t.lead_id&&lm.get(t.lead_id)?leadDTO(lm.get(t.lead_id),ctx.agentNames,ctx.listingNames,ctx.registered):null} satisfies WhatsAppThreadDTO;}));
+    return ok(threads.map(t=>{const m=msgs.find(x=>x.thread_id===t.id);const lead=t.lead_id?lm.get(t.lead_id):undefined;return {id:t.id,leadId:t.lead_id,phoneNormalized:t.phone_normalized,displayName:t.display_name,listingId:t.daleely_listing_id,lastMessageAt:t.last_message_at,unreadCount:t.unread_count,lastMessagePreview:m?.body||"",lastMessageStatus:m?.status||"",lead:lead?leadDTO(lead,ctx.agentNames,ctx.listingNames,ctx.registered):null} satisfies WhatsAppThreadDTO;}));
   }
   if(path[0]==="whatsapp"&&path[1]==="threads"&&path[2]){
     const t=(await rows(`voxora_whatsapp_threads?select=*&id=eq.${qs(path[2])}&limit=1`))[0]; if(!t)return err("thread_not_found",404); const msgs=await rows(`voxora_whatsapp_messages?select=*&thread_id=eq.${qs(t.id)}&order=created_at.asc&limit=5000`);

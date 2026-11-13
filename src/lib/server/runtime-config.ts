@@ -5,6 +5,8 @@ export function serverRuntimeConfig() {
     daleelySupabaseUrl: process.env.DALEELY_SUPABASE_URL || process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "",
     supabaseSecretKey: process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || "",
     supabasePublishableKey: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY || "",
+    voxoraAppKey: process.env.VOXORA_APP_KEY || "",
+    voxoraSessionSecret: process.env.VOXORA_SESSION_SECRET || "",
     daleelyListingsTable: process.env.DALEELY_LISTINGS_TABLE || "listings",
     daleelyUsersTable: process.env.DALEELY_USERS_TABLE || "user_profiles",
     telephonyBackendUrl: process.env.TELEPHONY_BACKEND_URL || "",

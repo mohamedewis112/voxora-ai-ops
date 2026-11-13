@@ -13,15 +13,12 @@ import {
   LogOut,
   Menu,
   Moon,
-  PhoneCall,
-  Search,
   Sun,
   UserRound,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { toast } from "sonner";
 import { useI18n } from "@/lib/i18n";
-import { useDataStore } from "@/stores/data-store";
 import { useUiStore, type ViewKey } from "@/stores/ui-store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,7 +35,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { SidebarContent } from "./sidebar";
 import { cn } from "@/lib/utils";
 import { useOps } from "@/hooks/use-ops";
-import { BadgeCheck, CalendarClock as CalIcon, PhoneCall as PhoneIcon, Sparkles } from "lucide-react";
+import { BadgeCheck, CalendarClock as CalIcon, CircleAlert, Info } from "lucide-react";
 
 interface OpsNotif {
   id: string;
@@ -52,17 +49,16 @@ interface OpsNotif {
 
 const NOTIF_ICON: Record<string, typeof Sparkles> = {
   success: BadgeCheck,
-  info: Sparkles,
+  info: Info,
   warning: CalIcon,
-  error: PhoneIcon,
+  error: CircleAlert,
 };
 
 export function Header() {
   const { t, lang, setLang, dir } = useI18n();
   const { theme, setTheme } = useTheme();
-  const { view, setView, account, logout, setCallsSearch, setContactsSearch } = useUiStore();
-  const followups = useDataStore((s) => s.followups);
-  const [query, setQuery] = useState("");
+  const { view, setView, account, logout } = useUiStore();
+  const followups: Array<{ id: string; name: string; reason: string; status: string; dueAt: string }> = [];
   const [drawerOpen, setDrawerOpen] = useState(false);
   const { data: opsNotifs } = useOps<OpsNotif[]>("notifications", undefined, { pollMs: 30000 });
 
@@ -73,27 +69,14 @@ export function Header() {
     .sort((a, b) => new Date(a.dueAt).getTime() - new Date(b.dueAt).getTime())
     .slice(0, 6);
 
-  const submitSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    const q = query.trim();
-    if (!q) return;
-    if (/^\d+$/.test(q)) {
-      setCallsSearch(q);
-      setView("calls");
-    } else {
-      setContactsSearch(q);
-      setView("contacts");
-    }
-  };
-
   const notificationsNode = (
     <PopoverContent align="end" className="w-80 p-0">
       <div className="border-b border-border px-4 py-3 text-sm font-medium">{t("common.notifications")}</div>
-      {/* Voxora ops notifications (leads, merges, ownership links, bot) */}
+      {/* Sales operations notifications */}
       {(opsNotifs ?? []).length > 0 && (
         <div className="sc-scroll max-h-52 overflow-y-auto border-b border-border/70 p-2">
           {(opsNotifs ?? []).slice(0, 5).map((n) => {
-            const Icon = NOTIF_ICON[n.type] ?? Sparkles;
+            const Icon = NOTIF_ICON[n.type] ?? Info;
             return (
               <button
                 key={n.id}
@@ -189,17 +172,7 @@ export function Header() {
           {t(`nav.${view === "account" ? "settings" : view === "queue" ? "queue" : view}`)}
         </p>
 
-        {/* Global search (desktop) */}
-        <form onSubmit={submitSearch} className="relative hidden w-full max-w-sm md:block">
-          <Search className="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-          <Input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder={t("common.searchPlaceholder")}
-            className="h-9 rounded-lg bg-background/60 ps-9 text-sm"
-            aria-label={t("common.search")}
-          />
-        </form>
+
 
         <div className="ms-auto flex items-center gap-1.5">
           {/* Notifications */}
@@ -283,7 +256,7 @@ export function Footer() {
   return (
     <footer className="mt-auto border-t border-border/60 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
       <div className="mx-auto flex max-w-[1400px] flex-wrap items-center justify-between gap-2 text-[11px] text-muted-foreground">
-        <p>© {new Date().getFullYear()} Voxora AI — {t("app.footerRights")}</p>
+        <p>© {new Date().getFullYear()} Voxora Sales — {t("app.footerRights")}</p>
         <p className="inline-flex items-center gap-1.5">
           <span className="size-1.5 rounded-full bg-emerald-500 sc-live-dot" aria-hidden="true" />
           {process.env.NEXT_PUBLIC_DALEELY_ADAPTER === "supabase" ? "متصل بقاعدة التشغيل" : `${t("app.connected")} ${t("app.mockProvider")}`}
@@ -297,18 +270,4 @@ export function viewTitleKey(view: ViewKey): string {
   if (view === "queue") return "nav.queue";
   if (view === "account") return "common.account";
   return `nav.${view}`;
-}
-
-export function QuickNavChip({ view, label }: { view: ViewKey; label: string }) {
-  const setView = useUiStore((s) => s.setView);
-  return (
-    <button
-      type="button"
-      onClick={() => setView(view)}
-      className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1 text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
-    >
-      <PhoneCall className="size-3" aria-hidden="true" />
-      {label}
-    </button>
-  );
 }

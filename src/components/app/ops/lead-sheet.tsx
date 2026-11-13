@@ -125,8 +125,11 @@ export function LeadSheet() {
 
   // Load whenever the selected lead changes (programmatic open via row clicks).
   useEffect(() => {
-    if (selectedLeadId) load(selectedLeadId);
-    else setDetail(null);
+    const timer = window.setTimeout(() => {
+      if (selectedLeadId) void load(selectedLeadId);
+      else setDetail(null);
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [selectedLeadId, load]);
 
   const act = async (fn: () => Promise<unknown>, successKey?: string) => {

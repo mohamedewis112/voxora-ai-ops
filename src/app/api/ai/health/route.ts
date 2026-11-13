@@ -4,6 +4,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   const { llmUrl, llmModel } = serverRuntimeConfig();
+  if (!llmUrl) return Response.json({ ok: false, configured: false, reachable: false, model: llmModel }, { status: 503 });
   try {
     const r = await fetch(`${llmUrl.replace(/\/$/, "")}/api/tags`, { signal: AbortSignal.timeout(3000), cache: "no-store" });
     if (!r.ok) return Response.json({ ok: false, configured: true, reachable: false, model: llmModel, status: r.status }, { status: 503 });

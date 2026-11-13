@@ -99,10 +99,41 @@ async function addAudit(actor:VoxoraActor, action:string, entityType:string, ent
 }
 async function getLead(id:string) { return (await rows(`voxora_leads?select=*&id=eq.${qs(id)}&limit=1`))[0] || null; }
 async function getListing(id:string) { return (await rows(`listings?select=*&id=eq.${qs(id)}&limit=1`))[0] || null; }
+function canAccessLead(actor:VoxoraActor, lead:Row|null) {
+  return !!lead && (actor.type==="admin" || lead.assigned_agent_id===actor.id);
+}
+async function ownLeadIds(actor:VoxoraActor) {
+  if(actor.type==="admin") return null;
+  const mine=await rows(`voxora_leads?select=id&assigned_agent_id=eq.${qs(actor.id)}&limit=5000`);
+  return new Set<string>(mine.map(x=>x.id));
+}
 
 export async function handleSupabaseOpsGet(path:string[], req:Request, actor:VoxoraActor):Promise<Response> {
-  void actor;
   const url=new URL(req.url); const q=(url.searchParams.get("q")||"").trim().toLowerCase();
+  const adminOnlyGet=new Set(["lookup","unclaimed","duplicates","bot-queue","audit","performance","listings"]);
+  if(actor.type==="sales_agent" && adminOnlyGet.has(path[0])) return err("forbidden",403);
+
+  if(path[0]==="overview" && actor.type==="sales_agent"){
+    const [leads,threads,notifs]=await Promise.all([
+      rows(`voxora_leads?select=id,prefix,status,assigned_agent_id&assigned_agent_id=eq.${qs(actor.id)}&limit=5000`),
+      rows("voxora_whatsapp_threads?select=id,lead_id,unread_count&limit=5000"),
+      rows(`voxora_internal_notifications?select=id,read&target_agent_id=eq.${qs(actor.id)}&limit=5000`)
+    ]);
+    const ids=new Set(leads.map(l=>l.id));
+    const leadsByPrefix:Record<string,number>={}; const callStatusCounts:Record<string,number>={};
+    for(const l of leads){ const p=l.prefix||"other"; leadsByPrefix[p]=(leadsByPrefix[p]||0)+1; callStatusCounts[l.status]=(callStatusCounts[l.status]||0)+1; }
+    const counts={...leadsByPrefix};
+    const data:OpsOverviewDTO={
+      totalLeads:leads.length,leadsByPrefix,
+      distribution:[{agentId:actor.id,agentName:actor.name,status:"active",counts,total:leads.length}],
+      unclaimedCount:0,pendingMerges:0,botQueued:0,botRunning:0,
+      whatsappUnread:threads.filter(t=>ids.has(t.lead_id)).reduce((s,t)=>s+(t.unread_count||0),0),
+      callStatusCounts,invalidCount:leads.filter(l=>["invalid_number","out_of_service"].includes(l.status)).length,
+      closedCount:leads.filter(l=>l.status==="closed_business").length,hiddenCount:0,
+      notificationsUnread:notifs.filter(n=>!n.read).length
+    };
+    return ok(data);
+  }
   if(path[0]==="overview"){
     const [leads,agents,listings,states,merges,bots,threads,notifs]=await Promise.all([
       rows("voxora_leads?select=id,prefix,status,assigned_agent_id&limit=5000"), rows("voxora_sales_agents?select=id,name,status&limit=500"),
@@ -123,18 +154,26 @@ export async function handleSupabaseOpsGet(path:string[], req:Request, actor:Vox
     return ok(data);
   }
   if(path[0]==="agents"){
-    const [agents,leads]=await Promise.all([rows("voxora_sales_agents?select=*&order=created_at.asc&limit=500"),rows("voxora_leads?select=assigned_agent_id&limit=5000")]);
+    const agentPath=actor.type==="sales_agent"
+      ? `voxora_sales_agents?select=*&id=eq.${qs(actor.id)}&limit=1`
+      : "voxora_sales_agents?select=*&order=created_at.asc&limit=500";
+    const leadPath=actor.type==="sales_agent"
+      ? `voxora_leads?select=assigned_agent_id&assigned_agent_id=eq.${qs(actor.id)}&limit=5000`
+      : "voxora_leads?select=assigned_agent_id&limit=5000";
+    const [agents,leads]=await Promise.all([rows(agentPath),rows(leadPath)]);
     return ok(agents.map(a=>({id:a.id,name:a.name,role:a.role,rawPhone:a.raw_phone,status:a.status,canReceiveLeads:a.can_receive_leads,createdAt:a.created_at,activeLeads:leads.filter(l=>l.assigned_agent_id===a.id).length})));
   }
   if(path[0]==="leads"&&!path[1]){
     const ctx=await context(); let ls=await rows("voxora_leads?select=*&order=updated_at.desc&limit=5000");
     const agentId=url.searchParams.get("agentId"),status=url.searchParams.get("status"),prefix=url.searchParams.get("prefix");
-    if(agentId) ls=ls.filter(l=>l.assigned_agent_id===agentId); if(status&&status!=="all")ls=ls.filter(l=>l.status===status); if(prefix&&prefix!=="all")ls=ls.filter(l=>l.prefix===prefix);
+    if(actor.type==="sales_agent") ls=ls.filter(l=>l.assigned_agent_id===actor.id);
+    else if(agentId) ls=ls.filter(l=>l.assigned_agent_id===agentId);
+    if(status&&status!=="all")ls=ls.filter(l=>l.status===status); if(prefix&&prefix!=="all")ls=ls.filter(l=>l.prefix===prefix);
     if(q)ls=ls.filter(l=>String(l.normalized_phone||"").includes(q)||String(l.raw_phone||"").includes(q)||String(l.business_name||"").toLowerCase().includes(q)||String(l.customer_name||"").toLowerCase().includes(q));
     return ok(ls.map(l=>leadDTO(l,ctx.agentNames,ctx.listingNames,ctx.registered)));
   }
   if(path[0]==="leads"&&path[1]&&path[2]==="detail"){
-    const l=await getLead(path[1]); if(!l)return err("lead_not_found",404); const ctx=await context();
+    const l=await getLead(path[1]); if(!l)return err("lead_not_found",404); if(!canAccessLead(actor,l))return err("forbidden",403); const ctx=await context();
     const [timeline,calls,followups,bot,links]=await Promise.all([
       rows(`voxora_timeline_events?select=*&lead_id=eq.${qs(l.id)}&order=created_at.desc&limit=500`),
       rows(`voxora_call_attempts?select=*&lead_id=eq.${qs(l.id)}&order=created_at.desc&limit=500`),
@@ -176,10 +215,13 @@ export async function handleSupabaseOpsGet(path:string[], req:Request, actor:Vox
   }
   if(path[0]==="whatsapp"&&path[1]==="threads"&&!path[2]){
     const [threads,msgs,leads]=await Promise.all([rows("voxora_whatsapp_threads?select=*&order=last_message_at.desc.nullslast&limit=5000"),rows("voxora_whatsapp_messages?select=*&order=created_at.desc&limit=10000"),rows("voxora_leads?select=*&limit=5000")]); const ctx=await context();const lm=new Map(leads.map(l=>[l.id,l]));
-    return ok(threads.map(t=>{const m=msgs.find(x=>x.thread_id===t.id);const lead=t.lead_id?lm.get(t.lead_id):undefined;return {id:t.id,leadId:t.lead_id,phoneNormalized:t.phone_normalized,displayName:t.display_name,listingId:t.daleely_listing_id,lastMessageAt:t.last_message_at,unreadCount:t.unread_count,lastMessagePreview:m?.body||"",lastMessageStatus:m?.status||"",lead:lead?leadDTO(lead,ctx.agentNames,ctx.listingNames,ctx.registered):null} satisfies WhatsAppThreadDTO;}));
+    const visible=actor.type==="sales_agent"?threads.filter(t=>t.lead_id&&lm.get(t.lead_id)?.assigned_agent_id===actor.id):threads;
+    return ok(visible.map(t=>{const m=msgs.find(x=>x.thread_id===t.id);const lead=t.lead_id?lm.get(t.lead_id):undefined;return {id:t.id,leadId:t.lead_id,phoneNormalized:t.phone_normalized,displayName:t.display_name,listingId:t.daleely_listing_id,lastMessageAt:t.last_message_at,unreadCount:t.unread_count,lastMessagePreview:m?.body||"",lastMessageStatus:m?.status||"",lead:lead?leadDTO(lead,ctx.agentNames,ctx.listingNames,ctx.registered):null} satisfies WhatsAppThreadDTO;}));
   }
   if(path[0]==="whatsapp"&&path[1]==="threads"&&path[2]){
-    const t=(await rows(`voxora_whatsapp_threads?select=*&id=eq.${qs(path[2])}&limit=1`))[0]; if(!t)return err("thread_not_found",404); const msgs=await rows(`voxora_whatsapp_messages?select=*&thread_id=eq.${qs(t.id)}&order=created_at.asc&limit=5000`);
+    const t=(await rows(`voxora_whatsapp_threads?select=*&id=eq.${qs(path[2])}&limit=1`))[0]; if(!t)return err("thread_not_found",404);
+    if(actor.type==="sales_agent"){ const lead=t.lead_id?await getLead(t.lead_id):null; if(!canAccessLead(actor,lead))return err("forbidden",403); }
+    const msgs=await rows(`voxora_whatsapp_messages?select=*&thread_id=eq.${qs(t.id)}&order=created_at.asc&limit=5000`);
     await patch("voxora_whatsapp_threads",`id=eq.${qs(t.id)}`,{unread_count:0});
     return ok({thread:{id:t.id,leadId:t.lead_id,phoneNormalized:t.phone_normalized,displayName:t.display_name,listingId:t.daleely_listing_id,lastMessageAt:t.last_message_at,unreadCount:0},messages:msgs.map(m=>({id:m.id,threadId:m.thread_id,direction:m.direction,body:m.body,template:m.template,status:m.status,actorType:m.actor_type,sentAt:m.sent_at,deliveredAt:m.delivered_at,readAt:m.read_at,createdAt:m.created_at} satisfies WhatsAppMessageDTO))});
   }
@@ -189,14 +231,19 @@ export async function handleSupabaseOpsGet(path:string[], req:Request, actor:Vox
   if(path[0]==="performance"){
     const [agents,calls,leads,followups]=await Promise.all([rows("voxora_sales_agents?select=id,name,status,role&limit=500"),rows("voxora_call_attempts?select=*&limit=20000"),rows("voxora_leads?select=id,assigned_agent_id,status&limit=5000"),rows("voxora_followups?select=assignee_id,status&limit=5000")]); const data:PerformanceRowDTO[]=agents.filter(a=>a.status!=="removed").map(a=>{const cs=calls.filter(c=>c.agent_id===a.id);const ls=leads.filter(l=>l.assigned_agent_id===a.id);const linked=ls.filter(l=>l.status==="linked").length;return {label:a.name,kind:"sales",calls:cs.length,answered:cs.filter(c=>!["busy","no_answer","switched_off","failed"].includes(c.outcome)).length,interested:cs.filter(c=>c.outcome==="interested").length,followups:followups.filter(f=>f.assignee_id===a.id).length,linked,conversionRate:cs.length?Math.round((linked/cs.length)*100):0};}); const ai=calls.filter(c=>c.agent_type==="ai_agent");data.push({label:"Voxora AI",kind:"ai",calls:ai.length,answered:ai.filter(c=>!["busy","no_answer","switched_off","failed"].includes(c.outcome)).length,interested:ai.filter(c=>c.outcome==="interested").length,followups:0,linked:ai.filter(c=>c.outcome==="linked").length,conversionRate:ai.length?Math.round(ai.filter(c=>c.outcome==="linked").length/ai.length*100):0});return ok(data);
   }
-  if(path[0]==="notifications") return ok(await rows("voxora_internal_notifications?select=*&order=created_at.desc&limit=500"));
+  if(path[0]==="notifications") return ok(await rows(actor.type==="sales_agent"
+    ? `voxora_internal_notifications?select=*&target_agent_id=eq.${qs(actor.id)}&order=created_at.desc&limit=500`
+    : "voxora_internal_notifications?select=*&order=created_at.desc&limit=500"));
   if(path[0]==="listings") { const ls=await rows("listings?select=*&limit=5000");return ok(ls.filter(l=>!q||[l.name,l.phone,l.address].some(v=>String(v||"").toLowerCase().includes(q))).map(l=>listingDTO(l))); }
   return err("unknown_route:"+path.join("/"),404);
 }
 
 export async function handleSupabaseOpsPost(path:string[],req:Request,actor:VoxoraActor):Promise<Response>{
   const body=await req.json().catch(()=>({})) as Json; const str=(k:string)=>typeof body[k]==="string"?String(body[k]).trim():"";
+  const adminOnlyPost=new Set(["listings","bot-queue","merge","agents"]);
+  if(actor.type==="sales_agent" && adminOnlyPost.has(path[0])) return err("forbidden",403);
   if(path[0]==="leads"&&!path[1]){
+    if(actor.type==="sales_agent") return err("forbidden",403);
     const raw=str("phone")||str("rawPhone");const n=normalizePhone(raw);if(!n.ok)return err("invalid_phone");
     const profiles=await rows("user_profiles?select=user_id,full_name,name,phone&limit=5000");const p=profiles.find(x=>canonPhone(x.phone)===n.canonical);
     const result=await daleelyRpc<Row>("voxora_ensure_lead",{p_raw_phone:raw,p_listing_id:body.listingId||null,p_user_id:p?.user_id||body.userId||null,p_business_name:str("businessName"),p_customer_name:str("customerName")||(p?.full_name||p?.name||""),p_source:str("source")||"admin"});
@@ -213,7 +260,8 @@ export async function handleSupabaseOpsPost(path:string[],req:Request,actor:Voxo
   }
   if(path[0]==="listings"&&path[2]==="restore") { const data=await daleelyRpc("voxora_restore_listing",{p_listing_id:path[1],p_actor_id:actor.id});return ok(data); }
   if(path[0]==="leads"&&path[1]){
-    const lead=await getLead(path[1]);if(!lead)return err("lead_not_found",404);const leadId=lead.id;
+    const lead=await getLead(path[1]);if(!lead)return err("lead_not_found",404);if(!canAccessLead(actor,lead))return err("forbidden",403);const leadId=lead.id;
+    if(actor.type==="sales_agent" && ["bot","transfer"].includes(path[2]||"")) return err("forbidden",403);
     if(path[2]==="outcome"){
       const outcome=str("outcome");const valid=["busy","no_answer","switched_off","invalid_number","out_of_service","answered","interested","not_interested","callback","whatsapp_followup","linked","transferred_to_sales","closed_business","completed","failed"];if(!valid.includes(outcome))return err("invalid_outcome");
       await patch("voxora_leads",`id=eq.${qs(leadId)}`,{status:outcome,last_outcome:outcome}); const attempt=await insert<Row>("voxora_call_attempts",{lead_id:leadId,agent_type:actor.type==="sales_agent"?"sales_agent":"sales_agent",agent_id:lead.assigned_agent_id,outcome,reason:str("reason")||null,confidence:typeof body.confidence==="number"?body.confidence:null,notes:str("notes")||null,duration_sec:typeof body.durationSec==="number"?Math.round(body.durationSec as number):0,started_at:now(),ended_at:now()}); await addTimeline(leadId,"call_outcome",`نتيجة اتصال: ${outcome}`,actor,{outcome});await addAudit(actor,"lead.outcome","lead",leadId,{oldValue:{status:lead.status},newValue:{status:outcome},source:"sales_workspace"});return ok({status:outcome,attemptId:attempt.id});
@@ -259,9 +307,25 @@ export async function handleSupabaseOpsPost(path:string[],req:Request,actor:Voxo
     if(action==="set-role"){const role=str("role");await patch("voxora_sales_agents",`id=eq.${qs(a.id)}`,{role,can_receive_leads:role==="sales"||role==="manager"});return ok({ok:true});}return err("invalid_action");
   }
   if(path[0]==="whatsapp"&&path[1]==="threads"&&path[2]&&path[3]==="send"){
-    const t=(await rows(`voxora_whatsapp_threads?select=*&id=eq.${qs(path[2])}&limit=1`))[0];if(!t)return err("thread_not_found",404);const m=await insert<Row>("voxora_whatsapp_messages",{thread_id:t.id,direction:"out",body:str("body"),template:str("template")||null,status:"queued",actor_type:actor.type==="sales_agent"?"sales_agent":"sales_agent",actor_id:actor.id});await patch("voxora_whatsapp_threads",`id=eq.${qs(t.id)}`,{last_message_at:now()});return ok({messageId:m.id,queued:true});
+    const t=(await rows(`voxora_whatsapp_threads?select=*&id=eq.${qs(path[2])}&limit=1`))[0];if(!t)return err("thread_not_found",404);
+    if(actor.type==="sales_agent"){const lead=t.lead_id?await getLead(t.lead_id):null;if(!canAccessLead(actor,lead))return err("forbidden",403);}
+    const m=await insert<Row>("voxora_whatsapp_messages",{thread_id:t.id,direction:"out",body:str("body"),template:str("template")||null,status:"queued",actor_type:"sales_agent",actor_id:actor.id});await patch("voxora_whatsapp_threads",`id=eq.${qs(t.id)}`,{last_message_at:now()});return ok({messageId:m.id,queued:true});
   }
   if(path[0]==="whatsapp"&&path[1]==="threads"&&path[2]&&path[3]==="simulate-reply") return err("simulation_disabled_in_production",409);
-  if(path[0]==="notifications"&&path[1]==="read") { if(str("scope")==="all")await patch("voxora_internal_notifications","read=eq.false",{read:true}); else if(Array.isArray(body.ids))for(const id of body.ids as string[])await patch("voxora_internal_notifications",`id=eq.${qs(id)}`,{read:true});return ok({ok:true}); }
+  if(path[0]==="notifications"&&path[1]==="read") {
+    if(str("scope")==="all"){
+      const filter=actor.type==="sales_agent"?`read=eq.false&target_agent_id=eq.${qs(actor.id)}`:"read=eq.false";
+      await patch("voxora_internal_notifications",filter,{read:true});
+    } else if(Array.isArray(body.ids)){
+      for(const id of body.ids as string[]){
+        if(actor.type==="sales_agent"){
+          const owned=(await rows(`voxora_internal_notifications?select=id&target_agent_id=eq.${qs(actor.id)}&id=eq.${qs(id)}&limit=1`))[0];
+          if(!owned)continue;
+        }
+        await patch("voxora_internal_notifications",`id=eq.${qs(id)}`,{read:true});
+      }
+    }
+    return ok({ok:true});
+  }
   return err("unknown_route:"+path.join("/"),404);
 }

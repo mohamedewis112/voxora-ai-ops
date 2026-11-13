@@ -6,7 +6,7 @@
  */
 
 import { useState } from "react";
-import { Languages, Loader2, Lock, Mail, Moon, PhoneCall, Sun } from "lucide-react";
+import { Languages, Loader2, Lock, LogIn, Mail, Moon, Sun } from "lucide-react";
 import Image from "next/image";
 import { useTheme } from "next-themes";
 import { toast } from "sonner";
@@ -40,9 +40,6 @@ function AuthShell({ children }: { children: React.ReactNode }) {
         </Button>
       </div>
       <div className="relative w-full max-w-sm">{children}</div>
-      <p className="relative mt-6 max-w-sm text-center text-[11px] leading-relaxed text-muted-foreground/70">
-        {t("app.simulationNote")}
-      </p>
     </div>
   );
 }
@@ -52,10 +49,10 @@ function Brand() {
   return (
     <div className="mb-7 flex flex-col items-center gap-3 text-center">
       <span className="flex size-14 items-center justify-center overflow-hidden rounded-2xl shadow-lg shadow-primary/20">
-        <Image src="/voxora.svg" alt="Voxora AI" width={56} height={56} className="size-14" />
+        <Image src="/voxora.svg" alt="Voxora Sales" width={56} height={56} className="size-14" />
       </span>
       <div>
-        <p className="text-lg font-bold tracking-tight">Voxora AI</p>
+        <p className="text-lg font-bold tracking-tight">Voxora Sales</p>
         <p className="mt-1 text-xs text-muted-foreground">{t("app.tagline")}</p>
       </div>
     </div>
@@ -85,7 +82,7 @@ export function LoginView() {
       } else {
         login({ email });
       }
-      setView("dashboard");
+      setView("sales");
       toast.success(t("toast.loginSuccess"));
     } catch (error) {
       toast.error(error instanceof Error && error.message === "not_authorized_for_voxora" ? "هذا الحساب غير مصرح له بدخول Voxora" : "بيانات الدخول غير صحيحة");
@@ -114,23 +111,16 @@ export function LoginView() {
             </div>
           </div>
           <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? <Loader2 className="size-4 animate-spin" /> : <PhoneCall className="size-4" />}
+            {loading ? <Loader2 className="size-4 animate-spin" /> : <LogIn className="size-4" />}
             {t("auth.login")}
           </Button>
           {process.env.NEXT_PUBLIC_DALEELY_ADAPTER !== "supabase" && (
-            <Button type="button" variant="secondary" className="w-full" onClick={() => { login(); setView("dashboard"); }}>
+            <Button type="button" variant="secondary" className="w-full" onClick={() => { login(); setView("sales"); }}>
               {t("auth.demoLogin")}
             </Button>
           )}
         </form>
-        <button
-          type="button"
-          onClick={() => setView("forgot")}
-          className="mt-4 w-full text-center text-xs text-muted-foreground underline-offset-4 hover:underline"
-        >
-          {t("auth.forgot")}
-        </button>
-        <p className="mt-3 text-center text-[10px] text-muted-foreground/60">{t("auth.demoHint")}</p>
+
       </div>
     </AuthShell>
   );

@@ -3,10 +3,10 @@ import "./globals.css";
 import { Providers } from "@/components/app/providers";
 
 export const metadata: Metadata = {
-  title: "Voxora AI — منصة المبيعات وعمليات العملاء",
+  title: "Voxora Sales — إدارة المبيعات ومتابعة العملاء",
   description:
-    "منصة مبيعات وعمليات عملاء بالذكاء الاصطناعي: خط مبيعات، إدارة عملاء محتملين، ربط ملاك الأنشطة، دمج الأنشطة المكررة، واتساب، طابور AI Bot، وتدقيق كامل — بنية متعددة المستأجرين جاهزة للربط مع Asterisk ونماذج محلية.",
-  keywords: ["AI", "sales", "CRM", "telephony", "WhatsApp", "leads", "Asterisk", "مبيعات", "عمليات"],
+    "منصة تشغيل لفريق المبيعات: توزيع العملاء المحتملين، تسجيل نتائج التواصل، المتابعات، واتساب، وربط أصحاب الأنشطة ببياناتهم.",
+  keywords: ["sales", "CRM", "WhatsApp", "leads", "مبيعات", "متابعة العملاء", "دليلي"],
   icons: { icon: "/voxora.svg" },
 };
 

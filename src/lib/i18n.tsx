@@ -21,10 +21,10 @@ type Entry = [string, string]; // [ar, en]
 
 const DICT: Record<string, Entry> = {
   /* ------------------------------ App chrome ------------------------------ */
-  "app.name": ["Voxora AI", "Voxora AI"],
+  "app.name": ["Voxora Sales", "Voxora Sales"],
   "app.tagline": [
-    "منصة المبيعات وعمليات العملاء بالذكاء الاصطناعي",
-    "Sales & Customer Operations Platform",
+    "منصة إدارة المبيعات ومتابعة العملاء",
+    "Sales & Customer Follow-up Platform",
   ],
   "app.simulation": ["وضع المحاكاة", "Simulation mode"],
   "app.simulationNote": [
@@ -764,7 +764,7 @@ const DICT: Record<string, Entry> = {
   "nav.mergeReview": ["مراجعة الدمج", "Merge Review"],
   "nav.botQueue": ["طابور البوت", "AI Bot Queue"],
   "nav.whatsapp": ["واتساب", "WhatsApp"],
-  "nav.performance": ["الأداء: المبيعات ضد AI", "Performance: Sales vs AI"],
+  "nav.performance": ["أداء المبيعات", "Sales performance"],
   "nav.audit": ["سجل التدقيق", "Audit Log"],
 
   /* generic ops */
@@ -792,10 +792,10 @@ const DICT: Record<string, Entry> = {
   "ops.minutesAgo": ["قبل دقائق", "minutes ago"],
 
   /* sales workspace */
-  "sales.desc": ["مساحة عمل موظف المبيعات: العملاء المعينون، نواتج الاتصال، المتابعات", "Sales workspace: assigned leads, call outcomes, follow-ups"],
+  "sales.desc": ["مساحة عمل موظف المبيعات: العملاء المعينون، نتائج التواصل، والمتابعات", "Sales workspace: assigned leads, contact outcomes, and follow-ups"],
   "sales.myLeads": ["عملائي", "My leads"],
   "sales.allAgents": ["كل الموظفين", "All agents"],
-  "sales.todayCalls": ["اتصالات اليوم", "Today's calls"],
+  "sales.todayCalls": ["تواصلات اليوم", "Today's contacts"],
   "sales.callbacks": ["رجوع مجدول", "Callbacks"],
   "sales.interested": ["مهتم", "Interested"],
   "sales.notInterested": ["غير مهتم", "Not interested"],
@@ -803,7 +803,7 @@ const DICT: Record<string, Entry> = {
   "sales.linkedBusinesses": ["أنشطة مرتبطة", "Linked businesses"],
   "sales.transferLead": ["تحويل العميل", "Transfer lead"],
   "sales.transferTo": ["تحويل إلى", "Transfer to"],
-  "sales.logCall": ["تسجيل نتيجة اتصال", "Log call outcome"],
+  "sales.logCall": ["تسجيل نتيجة التواصل", "Log contact outcome"],
   "sales.outcome.busy": ["مشغول", "Busy"],
   "sales.outcome.no_answer": ["لم يجب", "No answer"],
   "sales.outcome.switched_off": ["الجهاز مغلق", "Switched off"],
@@ -841,7 +841,7 @@ const DICT: Record<string, Entry> = {
   "sales.confidence": ["درجة التأكيد %", "Confidence %"],
   "sales.visibilityNote": ["ملاحظة: المكالمات غير المستجابة لا تخفي النشاط — التغيير يتطلب تأكيدًا موثقًا فقط", "Note: unanswered calls never hide a business — only documented confirmation changes visibility"],
   "sales.leadTimeline": ["الخط الزمني الموحد", "Unified timeline"],
-  "sales.callsHistory": ["سجل المحاولات", "Attempt history"],
+  "sales.callsHistory": ["سجل التواصل", "Contact history"],
   "sales.notesHistory": ["الملاحظات", "Notes"],
   "sales.notesSource": ["المصدر", "Source"],
   "sales.actor.admin": ["الإدارة", "Admin"],

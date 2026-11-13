@@ -25,7 +25,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import type { AgentDTO, LeadDTO, OpsOverviewDTO } from "@/lib/ops-types";
+import type { AgentDTO, LeadDTO } from "@/lib/ops-types";
 
 const STATUS_TONE: Record<string, string> = {
   new: "bg-zinc-500/15 text-zinc-400", assigned: "bg-zinc-500/15 text-zinc-300",
@@ -56,6 +56,8 @@ function relative(iso: string): string {
 export function SalesWorkspaceView() {
   const { t, fmtDateTime } = useI18n();
   const setView = useUiStore((s) => s.setView);
+  const account = useUiStore((s) => s.account);
+  const isSales = account.role === "sales_agent";
   const selectLead = useOpsUiStore((s) => s.selectLead);
 
   const [agentFilter, setAgentFilter] = useState("all");
@@ -68,10 +70,9 @@ export function SalesWorkspaceView() {
   const [busy, setBusy] = useState(false);
 
   const { data: agents } = useOps<AgentDTO[]>("agents");
-  const { data: overview } = useOps<OpsOverviewDTO>("overview");
   const { data: leads, loading, error, refresh } = useOps<LeadDTO[]>(
     "leads",
-    { agentId: agentFilter !== "all" ? agentFilter : undefined, status: statusFilter, prefix: prefixFilter, q },
+    { agentId: !isSales && agentFilter !== "all" ? agentFilter : undefined, status: statusFilter, prefix: prefixFilter, q },
     { pollMs: 30000 }
   );
 
@@ -123,26 +124,30 @@ export function SalesWorkspaceView() {
             <Button size="sm" variant="outline" onClick={refresh} aria-label={t("ops.retry")}>
               <RefreshCcw className="size-4" aria-hidden="true" />
             </Button>
-            <Button size="sm" onClick={() => setQuickOpen(true)}>
-              <Plus className="size-4" aria-hidden="true" /> {t("pipeline.tryAdd")}
-            </Button>
+            {!isSales && (
+              <Button size="sm" onClick={() => setQuickOpen(true)}>
+                <Plus className="size-4" aria-hidden="true" /> {t("pipeline.tryAdd")}
+              </Button>
+            )}
           </div>
         }
       />
 
       {/* Agent selector */}
       <div className="flex flex-wrap items-center gap-2">
-        <Select value={agentFilter} onValueChange={setAgentFilter}>
-          <SelectTrigger className="h-9 w-[220px]" aria-label={t("ops.agent")}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">{t("sales.allAgents")}</SelectItem>
-            {activeAgents.map((a) => (
-              <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        {!isSales && (
+          <Select value={agentFilter} onValueChange={setAgentFilter}>
+            <SelectTrigger className="h-9 w-[220px]" aria-label={t("ops.agent")}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t("sales.allAgents")}</SelectItem>
+              {activeAgents.map((a) => (
+                <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="h-9 w-[170px]" aria-label={t("ops.status")}>
             <SelectValue />
@@ -191,11 +196,6 @@ export function SalesWorkspaceView() {
             <span className="tnum font-bold">{value}</span>
           </span>
         ))}
-        {overview && (
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-violet-500/10 px-3 py-1.5 text-violet-400">
-            {t("overview.botQueued")}: <span className="tnum font-bold">{overview.botQueued + overview.botRunning}</span>
-          </span>
-        )}
       </div>
 
       {/* Leads table */}

@@ -1,14 +1,11 @@
 name: Bootstrap Voxora source
-
 on:
   push:
     branches: [feat/full-ops-integration]
     paths: [".github/workflows/bootstrap-source.yml"]
   workflow_dispatch:
-
 permissions:
   contents: write
-
 jobs:
   bootstrap:
     runs-on: ubuntu-latest
@@ -17,92 +14,32 @@ jobs:
         with:
           ref: feat/full-ops-integration
           fetch-depth: 0
-
-      - name: Download verified source archive from Firestorage public API
+      - name: Inspect Firestorage API bundle
         env:
-          SHARE_ID: Kv7G0bi0bdHd
-          EXPECTED_SHA256: c7c2af61fe9e53e5f79cc8229b3d62a079aa809cc73a8d84d688e22743d75719
-          EXPECTED_FILE_NAME: voxora-ai-ops-bootstrap.zip
+          SHARE_URL: https://firestorage.ai/ja/f/dv8eY4qY9Qm8
         run: |
+          set -euo pipefail
           python3 - <<'PY'
-          import hashlib, json, os, sys
-          from pathlib import Path
-          from urllib.request import Request, urlopen
-          from urllib.error import HTTPError, URLError
-
-          share=os.environ["SHARE_ID"]
-          expected=os.environ["EXPECTED_SHA256"].lower()
-          expected_name=os.environ["EXPECTED_FILE_NAME"]
-          bases=[
-            "https://firestorage.ai/api",
-            "https://firestorage.ai/api/v1",
-            "https://api.firestorage.ai",
-            "https://api.firestorage.ai/v1",
-            "https://api.firestorage.ai/api",
-            "https://api.firestorage.ai/api/v1",
-          ]
-          ua="Mozilla/5.0 VoxoraBootstrap/1.0"
-
-          def request(url, method="GET", data=None):
-              body=None if data is None else json.dumps(data).encode()
-              headers={"User-Agent":ua,"Accept":"application/json,*/*"}
-              if body is not None: headers["Content-Type"]="application/json"
-              req=Request(url,data=body,headers=headers,method=method)
-              with urlopen(req,timeout=25) as r:
-                  return r.geturl(), dict(r.headers), r.read()
-
-          for base in bases:
-              list_url=f"{base}/shares/{share}/files?maxResults=1000"
-              try:
-                  final, headers, body=request(list_url)
-                  if "json" not in headers.get("Content-Type","").lower():
-                      continue
-                  payload=json.loads(body)
-                  files=payload.get("files") or []
-                  print("API base accepted:",base,"files:",len(files))
-                  target=next((f for f in files if f.get("fileName")==expected_name or f.get("name")==expected_name),None)
-                  if target is None and len(files)==1:
-                      target=files[0]
-                  if not target:
-                      print("Expected file not found at base",base)
-                      continue
-                  fid=target.get("fileId") or target.get("id")
-                  if not fid:
-                      continue
-                  dl_url=f"{base}/shares/{share}/files/{fid}/download"
-                  _,_,dl_body=request(dl_url,"POST")
-                  dl=json.loads(dl_body)
-                  signed=dl.get("url") or dl.get("downloadUrl") or dl.get("download_url") or dl.get("signedUrl") or dl.get("signed_url")
-                  if not signed:
-                      print("Download JSON keys:",sorted(dl.keys()))
-                      continue
-                  _,_,archive=request(signed)
-                  digest=hashlib.sha256(archive).hexdigest().lower()
-                  print("Archive bytes:",len(archive),"sha256:",digest)
-                  if archive[:4]!=b"PK\x03\x04" or digest!=expected:
-                      continue
-                  Path("/tmp/voxora-source.zip").write_bytes(archive)
-                  print("Verified source archive downloaded.")
-                  sys.exit(0)
-              except Exception as e:
-                  print("Base failed:",base,type(e).__name__,str(e)[:160])
-          sys.exit("No Firestorage API base returned the expected verified archive")
+          import html,re,urllib.request
+          from urllib.parse import urljoin
+          share="https://firestorage.ai/ja/f/dv8eY4qY9Qm8"
+          def get(u):
+              req=urllib.request.Request(u,headers={"User-Agent":"Mozilla/5.0"})
+              return urllib.request.urlopen(req,timeout=25).read().decode("utf-8","ignore")
+          page=get(share)
+          js=[urljoin(share,x) for x in re.findall(r'(?:src|href)=["\']([^"\']+\.js[^"\']*)["\']',page,re.I)]
+          print("JS",len(js))
+          for u in js:
+              try: t=get(u)
+              except Exception: continue
+              needle="/files?maxResults=1000"
+              i=t.find(needle)
+              if i>=0:
+                  print("FOUND",u)
+                  print(t[max(0,i-6000):min(len(t),i+4000)])
+                  print("URLS")
+                  for x in sorted(set(re.findall(r'https?://[^"\'\\ ]+',t))):
+                      print(x[:500])
+                  break
           PY
-
-      - name: Extract source
-        run: |
-          python3 - <<'PY'
-          import zipfile
-          with zipfile.ZipFile("/tmp/voxora-source.zip") as z:
-              z.extractall(".")
-          PY
-          rm -rf .bootstrap
-          rm -f .github/workflows/bootstrap-source.yml
-
-      - name: Commit extracted source
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git commit -m "feat: integrate Voxora AI Ops production source"
-          git push origin HEAD:feat/full-ops-integration
+          exit 2

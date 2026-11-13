@@ -64,8 +64,6 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 
   const SALES: Array<[ViewKey, LucideIcon, string]> = [
     ["sales", UserCheck, "عملائي"],
-    ["followups", CalendarClock, t("nav.followups")],
-    ["whatsapp", MessageCircle, t("nav.whatsapp")],
   ];
 
   const ADMIN: Array<[ViewKey, LucideIcon, string]> = [

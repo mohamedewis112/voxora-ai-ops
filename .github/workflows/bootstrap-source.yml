@@ -18,62 +18,91 @@ jobs:
           ref: feat/full-ops-integration
           fetch-depth: 0
 
-      - name: Discover Firestorage download endpoint
+      - name: Download verified source archive from Firestorage public API
         env:
-          SHARE_URL: https://firestorage.ai/ja/f/Kv7G0bi0bdHd
-          FILE_ID: 01a1d51fecbf702aa3c4c2dbd75c09e7
-          PUBLIC_ID: nftEiw4hcTBsuEd3
           SHARE_ID: Kv7G0bi0bdHd
-          FILE_NAME: voxora-ai-ops-bootstrap.zip
+          EXPECTED_SHA256: c7c2af61fe9e53e5f79cc8229b3d62a079aa809cc73a8d84d688e22743d75719
+          EXPECTED_FILE_NAME: voxora-ai-ops-bootstrap.zip
         run: |
           python3 - <<'PY'
-          import html, os, re
-          from urllib.parse import urljoin, urlparse
+          import hashlib, json, os, sys
+          from pathlib import Path
           from urllib.request import Request, urlopen
+          from urllib.error import HTTPError, URLError
 
-          share=os.environ["SHARE_URL"]
-          needles=["download","signed","publicId","public_id","fileId","file_id","shareId","share_id",
-                   os.environ["FILE_ID"],os.environ["PUBLIC_ID"],os.environ["SHARE_ID"],os.environ["FILE_NAME"]]
-          def get(u):
-              req=Request(u,headers={"User-Agent":"Mozilla/5.0","Accept":"*/*"})
-              with urlopen(req,timeout=20) as r:
-                  return r.geturl(),r.read().decode("utf-8","ignore")
-          final,page=get(share)
-          print("PAGE",final,"chars",len(page))
-          sources=[urljoin(final,html.unescape(x)) for x in re.findall(r'(?:src|href)=["\']([^"\']+)["\']',page,re.I)]
-          js=[u for u in sources if urlparse(u).netloc=="firestorage.ai" and ".js" in u]
-          docs=[("PAGE",final,page)]
-          for u in js:
+          share=os.environ["SHARE_ID"]
+          expected=os.environ["EXPECTED_SHA256"].lower()
+          expected_name=os.environ["EXPECTED_FILE_NAME"]
+          bases=[
+            "https://firestorage.ai/api",
+            "https://firestorage.ai/api/v1",
+            "https://api.firestorage.ai",
+            "https://api.firestorage.ai/v1",
+            "https://api.firestorage.ai/api",
+            "https://api.firestorage.ai/api/v1",
+          ]
+          ua="Mozilla/5.0 VoxoraBootstrap/1.0"
+
+          def request(url, method="GET", data=None):
+              body=None if data is None else json.dumps(data).encode()
+              headers={"User-Agent":ua,"Accept":"application/json,*/*"}
+              if body is not None: headers["Content-Type"]="application/json"
+              req=Request(url,data=body,headers=headers,method=method)
+              with urlopen(req,timeout=25) as r:
+                  return r.geturl(), dict(r.headers), r.read()
+
+          for base in bases:
+              list_url=f"{base}/shares/{share}/files?maxResults=1000"
               try:
-                  fu,t=get(u)
-                  if len(t)<4_000_000:
-                      docs.append(("JS",fu,t))
-              except Exception:
-                  pass
-          print("JS_COUNT",len(docs)-1)
-          found=set()
-          for kind,u,t in docs:
-              for pat in [
-                  r'https://firestorage\.ai[^"\'\\\s<>]+',
-                  r'["\'](/api/[^"\'\\\s<>]+)["\']',
-                  r'["\'](/[^"\'\\\s<>]*(?:download|signed)[^"\'\\\s<>]*)["\']'
-              ]:
-                  for m in re.findall(pat,t,re.I):
-                      if isinstance(m,tuple): m=m[0]
-                      found.add(urljoin(u,html.unescape(m).replace("\\/","/")))
-              low=t.lower()
-              for needle in needles:
-                  start=0
-                  n=needle.lower()
-                  shown=0
-                  while shown<4:
-                      i=low.find(n,start)
-                      if i<0: break
-                      frag=t[max(0,i-260):min(len(t),i+520)].replace("\n"," ")
-                      print("SNIP",kind,u,needle,repr(frag[:900]))
-                      start=i+len(n); shown+=1
-          print("CANDIDATES")
-          for u in sorted(found):
-              print(u)
+                  final, headers, body=request(list_url)
+                  if "json" not in headers.get("Content-Type","").lower():
+                      continue
+                  payload=json.loads(body)
+                  files=payload.get("files") or []
+                  print("API base accepted:",base,"files:",len(files))
+                  target=next((f for f in files if f.get("fileName")==expected_name or f.get("name")==expected_name),None)
+                  if target is None and len(files)==1:
+                      target=files[0]
+                  if not target:
+                      print("Expected file not found at base",base)
+                      continue
+                  fid=target.get("fileId") or target.get("id")
+                  if not fid:
+                      continue
+                  dl_url=f"{base}/shares/{share}/files/{fid}/download"
+                  _,_,dl_body=request(dl_url,"POST")
+                  dl=json.loads(dl_body)
+                  signed=dl.get("url") or dl.get("downloadUrl") or dl.get("download_url") or dl.get("signedUrl") or dl.get("signed_url")
+                  if not signed:
+                      print("Download JSON keys:",sorted(dl.keys()))
+                      continue
+                  _,_,archive=request(signed)
+                  digest=hashlib.sha256(archive).hexdigest().lower()
+                  print("Archive bytes:",len(archive),"sha256:",digest)
+                  if archive[:4]!=b"PK\x03\x04" or digest!=expected:
+                      continue
+                  Path("/tmp/voxora-source.zip").write_bytes(archive)
+                  print("Verified source archive downloaded.")
+                  sys.exit(0)
+              except Exception as e:
+                  print("Base failed:",base,type(e).__name__,str(e)[:160])
+          sys.exit("No Firestorage API base returned the expected verified archive")
           PY
-          exit 2
+
+      - name: Extract source
+        run: |
+          python3 - <<'PY'
+          import zipfile
+          with zipfile.ZipFile("/tmp/voxora-source.zip") as z:
+              z.extractall(".")
+          PY
+          rm -rf .bootstrap
+          rm -f .github/workflows/bootstrap-source.yml
+
+      - name: Commit extracted source
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "feat: integrate Voxora AI Ops production source"
+          git push origin HEAD:feat/full-ops-integration

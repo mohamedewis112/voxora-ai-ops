@@ -10,7 +10,7 @@ async function allowed(userId: string) {
   if (admins[0]) return { allowed: true, name: admins[0].name || "Admin", role: admins[0].role };
   const agent = await daleelyRest(`voxora_sales_agents?select=id,name,role&daleely_user_id=eq.${encodeURIComponent(userId)}&status=eq.active&limit=1`, { method: "GET" });
   const agents = agent.ok ? await agent.json() as Array<{ id: string; name: string; role: string }> : [];
-  if (agents[0]) return { allowed: true, name: agents[0].name, role: agents[0].role };
+  if (agents[0]) return { allowed: true, name: agents[0].name, role: "sales_agent" };
   return { allowed: false, name: "", role: "" };
 }
 

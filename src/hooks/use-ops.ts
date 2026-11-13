@@ -78,8 +78,9 @@ export function useOps<T>(
 
   useEffect(() => {
     mounted.current = true;
-    load();
+    const timer = window.setTimeout(() => void load(), 0);
     return () => {
+      window.clearTimeout(timer);
       mounted.current = false;
     };
   }, [load]);

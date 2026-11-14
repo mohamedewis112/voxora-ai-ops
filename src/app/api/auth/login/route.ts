@@ -73,7 +73,7 @@ export async function POST(req: Request) {
 
   const body = await req.json().catch(() => ({})) as { email?: string; password?: string };
   const email = body.email?.trim().toLowerCase() || "";
-  const password = body.password || "";
+  const password = body.password?.trim() || "";
   if (!email || !password) return Response.json({ ok: false, error: "missing_credentials" }, { status: 400 });
 
   const sales = await salesCredential(email);
@@ -82,7 +82,7 @@ export async function POST(req: Request) {
       return Response.json({ ok: false, error: "invalid_credentials" }, { status: 401 });
     }
     const maxAge = 60 * 60 * 12;
-    const headers = new Headers({ "Content-Type": "application/json" });
+    const headers = new Headers({ "Content-Type": "application/json", "Cache-Control": "no-store" });
     const secure = process.env.NODE_ENV === "production" ? "; Secure" : "";
     const session = createSalesSessionValue({ id: sales.agentId, name: sales.name, email: sales.email }, maxAge);
     headers.append("Set-Cookie", `${salesCookieName()}=${encodeURIComponent(session)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure}`);

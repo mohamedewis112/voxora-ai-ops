@@ -15,11 +15,11 @@ export interface VoxoraActor {
   email?: string;
 }
 
-interface SalesSessionPayload {
+interface InternalSessionPayload {
   id: string;
   name: string;
   email: string;
-  role: "sales_agent";
+  role: "sales_agent" | "admin";
   exp: number;
 }
 
@@ -44,24 +44,31 @@ function sign(value: string, secret: string) {
   return createHmac("sha256", secret).update(value).digest("base64url");
 }
 
-export function createSalesSessionValue(
-  actor: { id: string; name: string; email: string },
+export function createInternalSessionValue(
+  actor: { id: string; name: string; email: string; role: "sales_agent" | "admin" },
   maxAgeSeconds = 60 * 60 * 12
 ) {
   const c = serverRuntimeConfig();
-  if (!c.voxoraSessionSecret) throw new Error("sales_session_not_configured");
-  const payload: SalesSessionPayload = {
+  if (!c.voxoraSessionSecret) throw new Error("internal_session_not_configured");
+  const payload: InternalSessionPayload = {
     id: actor.id,
     name: actor.name,
     email: actor.email,
-    role: "sales_agent",
+    role: actor.role,
     exp: Math.floor(Date.now() / 1000) + maxAgeSeconds,
   };
   const encoded = b64url(JSON.stringify(payload));
   return `${encoded}.${sign(encoded, c.voxoraSessionSecret)}`;
 }
 
-function parseSalesSession(value: string): SalesSessionPayload | null {
+export function createSalesSessionValue(
+  actor: { id: string; name: string; email: string },
+  maxAgeSeconds = 60 * 60 * 12
+) {
+  return createInternalSessionValue({ ...actor, role: "sales_agent" }, maxAgeSeconds);
+}
+
+function parseInternalSession(value: string): InternalSessionPayload | null {
   const c = serverRuntimeConfig();
   if (!value || !c.voxoraSessionSecret) return null;
   const [encoded, signature] = value.split(".");
@@ -71,8 +78,8 @@ function parseSalesSession(value: string): SalesSessionPayload | null {
   const b = Buffer.from(expected);
   if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
   try {
-    const payload = JSON.parse(fromB64url(encoded)) as SalesSessionPayload;
-    if (!payload.id || !payload.name || !payload.email || payload.role !== "sales_agent") return null;
+    const payload = JSON.parse(fromB64url(encoded)) as InternalSessionPayload;
+    if (!payload.id || !payload.name || !payload.email || !["sales_agent", "admin"].includes(payload.role)) return null;
     if (!payload.exp || payload.exp <= Math.floor(Date.now() / 1000)) return null;
     return payload;
   } catch {
@@ -105,15 +112,15 @@ async function getRows<T>(path: string): Promise<T[]> {
 }
 
 export async function authorizeVoxoraRequest(req: Request): Promise<VoxoraActor | null> {
-  const sales = parseSalesSession(cookieValue(req, SALES_COOKIE));
-  if (sales) {
+  const internal = parseInternalSession(cookieValue(req, SALES_COOKIE));
+  if (internal) {
     return {
-      userId: sales.id,
-      type: "sales_agent",
-      id: sales.id,
-      name: sales.name,
-      role: "sales_agent",
-      email: sales.email,
+      userId: internal.id,
+      type: internal.role === "admin" ? "admin" : "sales_agent",
+      id: internal.id,
+      name: internal.name,
+      role: internal.role,
+      email: internal.email,
     };
   }
 

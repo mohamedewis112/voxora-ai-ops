@@ -90,8 +90,9 @@ export function LoginView() {
       } else {
         login({ email });
       }
-      if (typeof window !== "undefined") window.history.replaceState(null, "", "#sales");
-      setView("sales");
+      const nextView = useUiStore.getState().account.role === "admin" ? "dashboard" : "sales";
+      if (typeof window !== "undefined") window.history.replaceState(null, "", `#${nextView}`);
+      setView(nextView);
       toast.success(t("toast.loginSuccess"));
     } catch (error) {
       toast.error(error instanceof Error && error.message === "not_authorized_for_voxora" ? "هذا الحساب غير مصرح له بدخول Voxora" : "بيانات الدخول غير صحيحة");

@@ -27,10 +27,7 @@ export function ManagerLeadSheet() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!selectedLeadId) {
-      setDetail(null);
-      return;
-    }
+    if (!selectedLeadId) return;
     let active = true;
     setLoading(true);
     opsGet<LeadDetail>(`leads/${selectedLeadId}/detail`)
@@ -42,7 +39,12 @@ export function ManagerLeadSheet() {
   const lead = detail?.lead;
 
   return (
-    <Sheet open={!!selectedLeadId} onOpenChange={(open) => { if (!open) clearLead(); }}>
+    <Sheet open={!!selectedLeadId} onOpenChange={(open) => {
+      if (!open) {
+        clearLead();
+        setDetail(null);
+      }
+    }}>
       <SheetContent className="w-full overflow-hidden sm:max-w-xl">
         <SheetHeader>
           <SheetTitle>تفاصيل العميل</SheetTitle>

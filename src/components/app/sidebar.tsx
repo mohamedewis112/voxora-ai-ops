@@ -3,10 +3,7 @@
 import Image from "next/image";
 import {
   CalendarClock,
-  GitBranch,
-  MessageCircle,
-  Scale,
-  Store,
+  LayoutDashboard,
   UserRound,
   UserCheck,
   type LucideIcon,
@@ -68,11 +65,9 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   ];
 
   const ADMIN: Array<[ViewKey, LucideIcon, string]> = [
-    ["sales", UserCheck, t("nav.sales")],
-    ["pipeline", GitBranch, t("nav.pipeline")],
-    ["unclaimed", Store, t("nav.unclaimed")],
-    ["merge-review", Scale, t("nav.mergeReview")],
-    ["whatsapp", MessageCircle, t("nav.whatsapp")],
+    ["dashboard", LayoutDashboard, "لوحة المدير"],
+    ["sales", UserCheck, "كل العملاء"],
+    ["followups", CalendarClock, "متابعات الفريق"],
   ];
 
   const items = isSales ? SALES : ADMIN;
@@ -90,7 +85,7 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
       </div>
 
       <nav className="sc-scroll mt-2 flex-1 overflow-y-auto px-3 pb-3" aria-label="Voxora Sales">
-        <NavGroup label={isSales ? "مساحة عملي" : "إدارة المبيعات"} />
+        <NavGroup label={isSales ? "مساحة عملي" : "الإدارة والمتابعة"} />
         {items.map(([v, icon, label]) => (
           <NavItem key={v} v={v} icon={icon} label={label} active={view === v} onSelect={go} />
         ))}

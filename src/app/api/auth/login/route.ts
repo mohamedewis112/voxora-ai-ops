@@ -5,11 +5,22 @@ import {
   refreshCookieName,
   salesCookieName,
   createSalesSessionValue,
+  createInternalSessionValue,
   fetchSupabaseUser,
 } from "@/lib/server/voxora-auth";
 import { daleelyRest } from "@/integrations/daleely/supabase-server";
 
 export const dynamic = "force-dynamic";
+
+interface ManagerCredential {
+  id: string;
+  email: string;
+  name: string;
+  role: "admin";
+  passwordSalt: string;
+  passwordHash: string;
+  passwordIterations: number;
+}
 
 interface SalesCredential {
   agentId: string;
@@ -19,6 +30,22 @@ interface SalesCredential {
   passwordSalt: string;
   passwordHash: string;
   passwordIterations: number;
+}
+
+async function managerCredential(email: string): Promise<ManagerCredential | null> {
+  const c = serverRuntimeConfig();
+  if (!c.daleelySupabaseUrl || !c.supabasePublishableKey || !c.voxoraAppKey) return null;
+  const r = await fetch(`${c.daleelySupabaseUrl.replace(/\/$/, "")}/rest/v1/rpc/voxora_manager_credential`, {
+    method: "POST",
+    headers: {
+      apikey: c.supabasePublishableKey,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ p_app_key: c.voxoraAppKey, p_email: email }),
+    cache: "no-store",
+  });
+  if (!r.ok) return null;
+  return await r.json() as ManagerCredential | null;
 }
 
 async function salesCredential(email: string): Promise<SalesCredential | null> {
@@ -37,7 +64,7 @@ async function salesCredential(email: string): Promise<SalesCredential | null> {
   return await r.json() as SalesCredential | null;
 }
 
-function validPassword(password: string, credential: SalesCredential) {
+function validPassword(password: string, credential: SalesCredential | ManagerCredential) {
   try {
     const derived = Buffer.from(
       pbkdf2Sync(
@@ -75,6 +102,27 @@ export async function POST(req: Request) {
   const email = body.email?.trim().toLowerCase() || "";
   const password = body.password?.trim() || "";
   if (!email || !password) return Response.json({ ok: false, error: "missing_credentials" }, { status: 400 });
+
+  const manager = await managerCredential(email);
+  if (manager) {
+    if (!c.voxoraSessionSecret || !validPassword(password, manager)) {
+      return Response.json({ ok: false, error: "invalid_credentials" }, { status: 401 });
+    }
+    const maxAge = 60 * 60 * 12;
+    const headers = new Headers({ "Content-Type": "application/json", "Cache-Control": "no-store" });
+    const secure = process.env.NODE_ENV === "production" ? "; Secure" : "";
+    const session = createInternalSessionValue({
+      id: manager.id,
+      name: manager.name,
+      email: manager.email,
+      role: "admin",
+    }, maxAge);
+    headers.append("Set-Cookie", `${salesCookieName()}=${encodeURIComponent(session)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure}`);
+    return new Response(JSON.stringify({
+      ok: true,
+      data: { name: manager.name, email: manager.email, role: "admin" },
+    }), { status: 200, headers });
+  }
 
   const sales = await salesCredential(email);
   if (sales) {

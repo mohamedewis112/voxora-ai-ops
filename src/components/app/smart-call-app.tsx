@@ -48,8 +48,12 @@ export function SmartCallApp() {
           if (!cancelled && res.ok && payload.ok) {
             login({ name: payload.data.name, email: payload.data.email, role: payload.data.role });
             if (payload.data.role === "sales_agent") setView("sales");
-          } else if (!cancelled) logout();
-        } catch { if (!cancelled) logout(); }
+          } else if (!cancelled && !useUiStore.getState().authed) {
+            logout();
+          }
+        } catch {
+          if (!cancelled && !useUiStore.getState().authed) logout();
+        }
       } else {
         ensureDemoData();
       }

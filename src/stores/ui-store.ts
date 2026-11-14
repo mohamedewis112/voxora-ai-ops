@@ -5,7 +5,6 @@
  */
 
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
 import type { Account } from "@/lib/types";
 
 export type ViewKey =
@@ -49,14 +48,12 @@ interface UiState {
   setContactsSearch: (q: string) => void;
 }
 
-export const useUiStore = create<UiState>()(
-  persist(
-    (set) => ({
+export const useUiStore = create<UiState>()((set) => ({
       view: "sales",
       setView: (view) => set({ view }),
       authed: false,
       account: { name: "أحمد المصري", email: "admin@voxora.ai", role: "admin" },
-      login: (acc) => set((s) => ({ authed: true, account: { ...s.account, ...acc } })),
+      login: (acc) => set((s) => ({ authed: true, account: { ...s.account, ...acc }, view: "sales" })),
       logout: () => set({ authed: false, view: "login" }),
       updateAccount: (patch) => set((s) => {
         const { role: _ignoredRole, ...safePatch } = patch;
@@ -66,11 +63,4 @@ export const useUiStore = create<UiState>()(
       contactsSearch: "",
       setCallsSearch: (callsSearch) => set({ callsSearch }),
       setContactsSearch: (contactsSearch) => set({ contactsSearch }),
-    }),
-    {
-      name: "voxora-ui-v2",
-      partialize: (s) =>
-        Object.fromEntries(Object.entries(s).filter(([k]) => !["callsSearch", "contactsSearch"].includes(k))),
-    }
-  )
-);
+    }));

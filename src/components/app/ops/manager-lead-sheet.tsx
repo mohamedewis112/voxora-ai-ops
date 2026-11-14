@@ -24,15 +24,12 @@ export function ManagerLeadSheet() {
   const selectedLeadId = useOpsUiStore((s) => s.selectedLeadId);
   const clearLead = useOpsUiStore((s) => s.clearLead);
   const [detail, setDetail] = useState<LeadDetail | null>(null);
-  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!selectedLeadId) return;
     let active = true;
-    setLoading(true);
     opsGet<LeadDetail>(`leads/${selectedLeadId}/detail`)
-      .then((d) => { if (active) setDetail(d); })
-      .finally(() => { if (active) setLoading(false); });
+      .then((d) => { if (active) setDetail(d); });
     return () => { active = false; };
   }, [selectedLeadId]);
 
@@ -49,7 +46,7 @@ export function ManagerLeadSheet() {
         <SheetHeader>
           <SheetTitle>تفاصيل العميل</SheetTitle>
         </SheetHeader>
-        {loading && !detail ? (
+        {selectedLeadId && detail?.lead.id !== selectedLeadId ? (
           <div className="flex h-60 items-center justify-center"><Loader2 className="size-6 animate-spin text-muted-foreground" /></div>
         ) : !detail || !lead ? (
           <p className="py-10 text-center text-sm text-muted-foreground">تعذر تحميل العميل.</p>

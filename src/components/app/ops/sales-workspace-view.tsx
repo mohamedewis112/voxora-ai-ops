@@ -13,6 +13,7 @@ import { useUiStore } from "@/stores/ui-store";
 import { useOpsUiStore } from "@/stores/ops-ui-store";
 import { notifyOpsChanged, opsPost, useOps } from "@/hooks/use-ops";
 import { LeadSheet } from "./lead-sheet";
+import { ManagerLeadSheet } from "./manager-lead-sheet";
 import { PageHeader } from "../shared/page-header";
 import { EmptyState } from "../shared/empty-state";
 import { Button } from "@/components/ui/button";
@@ -124,11 +125,7 @@ export function SalesWorkspaceView() {
             <Button size="sm" variant="outline" onClick={refresh} aria-label={t("ops.retry")}>
               <RefreshCcw className="size-4" aria-hidden="true" />
             </Button>
-            {!isSales && (
-              <Button size="sm" onClick={() => setQuickOpen(true)}>
-                <Plus className="size-4" aria-hidden="true" /> {t("pipeline.tryAdd")}
-              </Button>
-            )}
+
           </div>
         }
       />
@@ -165,7 +162,7 @@ export function SalesWorkspaceView() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">{t("pipeline.prefix")}: {t("common.all")}</SelectItem>
-            {["010", "011", "012", "015"].map((p) => (
+            {["010", "011", "012", "015", "02"].map((p) => (
               <SelectItem key={p} value={p} className="tnum">{p}</SelectItem>
             ))}
           </SelectContent>
@@ -308,7 +305,7 @@ export function SalesWorkspaceView() {
       </Dialog>
 
       {/* Unified lead detail sheet */}
-      <LeadSheet />
+      {isSales ? <LeadSheet /> : <ManagerLeadSheet />}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { Activity, CalendarClock, CheckCircle2, Link2, RefreshCcw, Target, UsersRound } from "lucide-react";
+import { Activity, CalendarClock, Link2, RefreshCcw, Target, UsersRound, type LucideIcon } from "lucide-react";
 import { useOps } from "@/hooks/use-ops";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -50,14 +50,14 @@ export function ManagerDashboardView() {
   const overview = useOps<ManagerOverview>("overview", undefined, { pollMs: 20000 });
   const activity = useOps<ActivityRow[]>("activity", undefined, { pollMs: 20000 });
 
-  const cards = overview.data ? [
+  const cards: Array<[string, number, LucideIcon]> = overview.data ? [
     ["إجمالي العملاء", overview.data.totalLeads, UsersRound],
     ["تم الربط", overview.data.linked, Link2],
     ["مهتم", overview.data.interested, Target],
     ["متابعات اليوم", overview.data.followupsToday, CalendarClock],
     ["متابعات متأخرة", overview.data.overdueFollowups, CalendarClock],
     ["نشاطات اليوم", overview.data.activityToday, Activity],
-  ] as const : [];
+  ] : [];
 
   return (
     <div className="space-y-5">

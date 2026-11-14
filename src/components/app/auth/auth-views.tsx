@@ -82,17 +82,10 @@ export function LoginView() {
         const payload = await res.json();
         if (!res.ok || !payload.ok) throw new Error(payload.error || "login_failed");
 
-        const sessionRes = await fetch("/api/auth/session", {
-          credentials: "include",
-          cache: "no-store",
-        });
-        const sessionPayload = await sessionRes.json();
-        if (!sessionRes.ok || !sessionPayload.ok) throw new Error("session_failed");
-
         login({
-          name: sessionPayload.data.name,
-          email: sessionPayload.data.email,
-          role: sessionPayload.data.role,
+          name: payload.data.name,
+          email: payload.data.email,
+          role: payload.data.role,
         });
       } else {
         login({ email });
@@ -116,7 +109,7 @@ export function LoginView() {
             <Label htmlFor="email">{t("common.email")}</Label>
             <div className="relative">
               <Mail className="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-              <Input id="email" type="email" dir="ltr" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} className="ps-9" required />
+              <Input id="email" type="email" dir="ltr" autoComplete="username" autoCapitalize="none" spellCheck={false} value={email} onChange={(e) => setEmail(e.target.value)} className="ps-9" required />
             </div>
           </div>
           <div className="space-y-1.5">

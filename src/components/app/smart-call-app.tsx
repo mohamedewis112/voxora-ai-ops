@@ -15,10 +15,10 @@ import { UnclaimedView } from "./ops/unclaimed-view";
 import { MergeReviewView } from "./ops/merge-review-view";
 import { WhatsAppView } from "./ops/whatsapp-view";
 
-const SALES_VIEWS: ViewKey[] = ["sales", "followups", "account", "login"];
+const SALES_VIEWS: ViewKey[] = ["sales", "followups", "account"];
 const ADMIN_VIEWS: ViewKey[] = [
   "sales", "pipeline", "unclaimed", "merge-review", "whatsapp",
-  "account", "login",
+  "account",
 ];
 
 function Splash() {
@@ -59,6 +59,7 @@ export function SmartCallApp() {
   }, []);
 
   useEffect(() => {
+    if (!ready || !authed) return;
     const apply = () => {
       const h = window.location.hash.replace("#", "") as ViewKey;
       if (h && allowedViews.includes(h)) setView(h);
@@ -66,20 +67,20 @@ export function SmartCallApp() {
     apply();
     window.addEventListener("hashchange", apply);
     return () => window.removeEventListener("hashchange", apply);
-  }, [allowedViews, setView]);
+  }, [ready, authed, allowedViews, setView]);
 
   useEffect(() => {
     if (ready && authed && !allowedViews.includes(view)) setView("sales");
   }, [ready, authed, view, allowedViews, setView]);
 
   useEffect(() => {
-    if (ready && typeof window !== "undefined") {
+    if (ready && authed && typeof window !== "undefined") {
       window.history.replaceState(null, "", `#${allowedViews.includes(view) ? view : "sales"}`);
     }
-  }, [view, ready, allowedViews]);
+  }, [view, ready, authed, allowedViews]);
 
   if (!ready) return <Splash />;
-  if (!authed || view === "login") return <LoginView />;
+  if (!authed) return <LoginView />;
 
   return (
     <div className="flex min-h-screen flex-col bg-background">

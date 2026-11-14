@@ -2,6 +2,7 @@
 import { handleOpsGet, handleOpsPost } from "@/lib/server/ops-router";
 import { handleSupabaseOpsGet, handleSupabaseOpsPost } from "@/lib/server/supabase-ops-router";
 import { handleSalesRpcGet, handleSalesRpcPost } from "@/lib/server/sales-rpc-router";
+import { handleManagerRpcGet, handleManagerRpcPost } from "@/lib/server/manager-rpc-router";
 import { serverRuntimeConfig } from "@/lib/server/runtime-config";
 import { requireVoxoraActor } from "@/lib/server/voxora-auth";
 
@@ -32,6 +33,9 @@ export async function GET(req: Request, ctx: { params: Promise<{ path?: string[]
       if (auth.actor?.type === "sales_agent" && c.voxoraAppKey) {
         return await handleSalesRpcGet(path ?? [], req, auth.actor);
       }
+      if (auth.actor?.type === "admin" && c.voxoraAppKey) {
+        return await handleManagerRpcGet(path ?? [], req, auth.actor);
+      }
 
       if (!c.supabaseSecretKey) return backendUnavailable();
       return await handleSupabaseOpsGet(path ?? [], req, auth.actor!);
@@ -55,6 +59,9 @@ export async function POST(req: Request, ctx: { params: Promise<{ path?: string[
 
       if (auth.actor?.type === "sales_agent" && c.voxoraAppKey) {
         return await handleSalesRpcPost(path ?? [], req, auth.actor);
+      }
+      if (auth.actor?.type === "admin" && c.voxoraAppKey) {
+        return await handleManagerRpcPost(path ?? [], req, auth.actor);
       }
 
       if (!c.supabaseSecretKey) return backendUnavailable();

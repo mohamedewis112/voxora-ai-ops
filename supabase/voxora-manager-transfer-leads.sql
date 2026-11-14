@@ -16,6 +16,7 @@ set search_path = ''
 as $$
 declare
   v_manager public.admins%rowtype;
+  v_manager_credential public.voxora_manager_credentials%rowtype;
   v_target public.voxora_sales_agents%rowtype;
   v_lead public.voxora_leads%rowtype;
   v_previous_name text;
@@ -40,11 +41,26 @@ begin
       and is_active = true
     limit 1;
 
-  if v_manager.id is null then
-    raise exception 'forbidden';
-  end if;
+  if v_manager.id is not null then
+    v_manager_name := coalesce(nullif(v_manager.name, ''), nullif(p_manager_name, ''), 'المدير');
+  else
+    select *
+      into v_manager_credential
+      from public.voxora_manager_credentials
+      where id = p_manager_id
+        and active = true
+      limit 1;
 
-  v_manager_name := coalesce(nullif(v_manager.name, ''), nullif(p_manager_name, ''), 'المدير');
+    if v_manager_credential.id is null then
+      raise exception 'forbidden';
+    end if;
+
+    v_manager_name := coalesce(
+      nullif(v_manager_credential.name, ''),
+      nullif(p_manager_name, ''),
+      'المدير'
+    );
+  end if;
 
   if p_lead_ids is null or cardinality(p_lead_ids) = 0 then
     raise exception 'missing_leads';

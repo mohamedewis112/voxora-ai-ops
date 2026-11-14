@@ -1,0 +1,515 @@
+// Voxora AI — Database architecture (Prisma, SQLite-compatible for local dev)
+// ================================================================================
+// The operational frontend runs on a client-side mock store. When the backend
+// phase starts, these models map 1:1 to `supabase/schema.sql` (Postgres).
+// Notes:
+//  - Prisma (SQLite) has no native arrays → repeated fields are Json columns.
+//    In the Supabase SQL file the same fields become real arrays / FK tables.
+//  - `n8n`-style secrets NEVER live here — they live in server env vars.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Contact {
+  id              String    @id @default(cuid())
+  name            String
+  phone           String    @unique
+  business        String    @default("")
+  category        String    @default("")
+  city            String    @default("")
+  area            String    @default("")
+  source          String    @default("manual")
+  status          String    @default("active") // active | dnd | archived | wrong_number
+  tags            Json     
+  campaignId      String?
+  campaign        Campaign? @relation(fields: [campaignId], references: [id])
+  lastCallAt      DateTime?
+  nextFollowUpAt  DateTime?
+  notes           String    @default("")
+  createdAt       DateTime  @default(now())
+  calls           Call[]
+  leads           Lead[]
+  followUps       FollowUp[]
+  queueItems      QueueItem[]
+  contactTags     ContactTag[]
+  campaignContacts CampaignContact[]
+}
+
+model Campaign {
+  id             String   @id @default(cuid())
+  name           String
+  purpose        String   @default("")
+  callType       String   @default("outbound_sales")
+  startDate      DateTime?
+  timeFrom       String   @default("10:00")
+  timeTo         String   @default("18:00")
+  maxCallsPerDay Int      @default(100)
+  retryAttempts  Int      @default(3)
+  retryDelayHours Int     @default(4)
+  agentId        String?
+  agent          Agent?   @relation(fields: [agentId], references: [id])
+  knowledgeIds   Json    
+  status         String   @default("draft") // draft | scheduled | running | paused | completed
+  createdAt      DateTime @default(now())
+  contacts       Contact[]
+  calls          Call[]
+  leads          Lead[]
+  followUps      FollowUp[]
+  queueItems     QueueItem[]
+  campaignContacts CampaignContact[]
+}
+
+/// Join table for many-to-many campaign targeting (Supabase: campaign_contacts)
+model CampaignContact {
+  id         String   @id @default(cuid())
+  campaignId String
+  contactId  String
+  addedAt    DateTime @default(now())
+  campaign   Campaign @relation(fields: [campaignId], references: [id])
+  contact    Contact  @relation(fields: [contactId], references: [id])
+
+  @@unique([campaignId, contactId])
+}
+
+model Agent {
+  id            String   @id @default(cuid())
+  name          String
+  jobTitle      String   @default("")
+  type          String   @default("customer_service")
+  language      String   @default("ar_eg")
+  personality   String   @default("professional")
+  voice         String   @default("")
+  greeting      String   @default("")
+  closing       String   @default("")
+  objectionHandling String @default("")
+  transferWhen  String   @default("")
+  maxDurationMin Int     @default(8)
+  collectInfo   Json    
+  neverSay      Json    
+  systemPrompt  String   @default("")
+  flow          Json    
+  createdAt     DateTime @default(now())
+  campaigns     Campaign[]
+  calls         Call[]
+  prompts       AgentPrompt[]
+}
+
+/// Versioned prompt history (agent_prompts table)
+model AgentPrompt {
+  id        String   @id @default(cuid())
+  agentId   String
+  agent     Agent    @relation(fields: [agentId], references: [id])
+  prompt    String
+  createdAt DateTime @default(now())
+}
+
+model Call {
+  id              String   @id @default(cuid())
+  contactId       String?
+  contact         Contact? @relation(fields: [contactId], references: [id])
+  contactName     String   @default("")
+  phone           String
+  direction       String   @default("outbound") // outbound | inbound
+  campaignId      String?
+  campaign        Campaign? @relation(fields: [campaignId], references: [id])
+  agentId         String?
+  agent           Agent?   @relation(fields: [agentId], references: [id])
+  startedAt       DateTime
+  durationSec     Int      @default(0)
+  status          String   @default("answered") // answered | no_answer | busy | wrong_number | failed
+  outcome         String   @default("none")
+  leadScore       Int      @default(0)
+  sentiment       String   @default("neutral")
+  summary         String   @default("")
+  aiNotes         String   @default("")
+  followUpAction  String   @default("")
+  extracted       Json    
+  objection       String?
+  recordingStatus String   @default("pending") // available | pending | unavailable
+  createdAt       DateTime @default(now())
+  transcript      CallTranscript?
+  events          CallEvent[]
+  recording       CallRecording?
+}
+
+model CallTranscript {
+  id      String @id @default(cuid())
+  callId  String @unique
+  call    Call   @relation(fields: [callId], references: [id])
+  lines   Json   // [{speaker, text, atSec}]
+}
+
+model CallEvent {
+  id        String   @id @default(cuid())
+  callId    String
+  call      Call     @relation(fields: [callId], references: [id])
+  name      String   // call.started | call.ringing | call.answered | agent.speaking | ...
+  payload   Json    
+  at        DateTime @default(now())
+}
+
+model CallRecording {
+  id        String   @id @default(cuid())
+  callId    String   @unique
+  call      Call     @relation(fields: [callId], references: [id])
+  filePath  String   // server-side storage path (Supabase Storage bucket)
+  durationSec Int    @default(0)
+  createdAt DateTime @default(now())
+}
+
+model Lead {
+  id          String    @id @default(cuid())
+  contactId   String?
+  contact     Contact?  @relation(fields: [contactId], references: [id])
+  name        String    @default("")
+  phone       String
+  business    String    @default("")
+  stage       String    @default("new") // new | contacted | interested | followup | ready_to_close | transferred | won | lost
+  score       Int       @default(0)
+  lastCallAt  DateTime?
+  nextAction  String    @default("")
+  campaignId  String?
+  campaign    Campaign? @relation(fields: [campaignId], references: [id])
+  createdAt   DateTime  @default(now())
+}
+
+model FollowUp {
+  id         String    @id @default(cuid())
+  contactId  String?
+  contact    Contact?  @relation(fields: [contactId], references: [id])
+  name       String    @default("")
+  phone      String
+  reason     String    @default("")
+  dueAt      DateTime
+  campaignId String?
+  campaign   Campaign? @relation(fields: [campaignId], references: [id])
+  status     String    @default("pending") // pending | done | postponed | canceled
+  callId     String?
+  createdAt  DateTime  @default(now())
+}
+
+model QueueItem {
+  id          String    @id @default(cuid())
+  contactId   String?
+  contact     Contact?  @relation(fields: [contactId], references: [id])
+  name        String    @default("")
+  phone       String
+  campaignId  String?
+  campaign    Campaign? @relation(fields: [campaignId], references: [id])
+  attempts    Int       @default(0)
+  priority    String    @default("normal") // high | normal | low
+  scheduledAt DateTime?
+  status      String    @default("waiting") // waiting | calling | paused | done | canceled
+  createdAt   DateTime  @default(now())
+}
+
+model KnowledgeBase {
+  id        String   @id @default(cuid())
+  title     String
+  category  String   @default("")
+  type      String   @default("text") // text | faq | file
+  content   String   @default("")
+  faq       Json    
+  fileName  String?
+  tags      Json    
+  active    Boolean  @default(true)
+  updatedAt DateTime @updatedAt
+}
+
+model Tag {
+  id          String       @id @default(cuid())
+  name        String       @unique
+  color       String       @default("")
+  contactTags ContactTag[]
+}
+
+model ContactTag {
+  id        String @id @default(cuid())
+  contactId String
+  contact   Contact @relation(fields: [contactId], references: [id])
+  tagId     String
+  tag       Tag    @relation(fields: [tagId], references: [id])
+
+  @@unique([contactId, tagId])
+}
+
+/// App settings stored server-side; secrets live in env vars, never here.
+model Setting {
+  key       String   @id // e.g. "telephony", "aiModels", "transfer"
+  value     Json
+  updatedAt DateTime @updatedAt
+}
+
+/// Auth is delegated to Supabase Auth; this table mirrors profile metadata.
+model User {
+  id        String   @id // == auth.users.id from Supabase
+  email     String   @unique
+  name      String?
+  role      String   @default("viewer") // admin | manager | sales_agent | viewer
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ================================================================================
+// VOXORA AI — Operations schema (ops.*)
+// Added by feat/ops-integration. These models map 1:1 to `supabase/ops-schema.sql`.
+// SQLite has no arrays/Json → JSON payloads are stored as String columns.
+// Daleely remains the source of truth; these tables are the operations layer.
+// ================================================================================
+
+/// Mirror of tenant (Daleely) auth users / profiles — matched by normalized phone.
+model OpsUser {
+  id              String   @id @default(cuid())
+  fullName        String
+  rawPhone        String
+  normalizedPhone String  @unique
+  isRegistered    Boolean  @default(false) // has a tenant auth account
+  email           String?
+  createdAt       DateTime @default(now())
+}
+
+/// Platform team members. Two active sales now; model stays flexible.
+model SalesAgent {
+  id              String   @id @default(cuid())
+  name            String
+  role            String   @default("sales") // admin | manager | sales | viewer | ai_system
+  rawPhone        String?
+  status          String   @default("active") // active | disabled | removed
+  canReceiveLeads Boolean  @default(true)
+  createdAt       DateTime @default(now())
+}
+
+/// Tenant business listing mirror (Daleely source of truth stays external).
+model OpsListing {
+  id                   String   @id @default(cuid())
+  businessName         String
+  rawPhone             String
+  normalizedPhone      String
+  whatsapp             String?
+  category             String?
+  specialization       String?
+  governorate          String?
+  city                 String?
+  village              String?
+  address              String?
+  description          String?
+  logo                 String?
+  images               String   @default("[]") // JSON array of image urls/ids
+  socialLinks          String   @default("{}") // JSON {facebook, instagram, tiktok...}
+  website              String?
+  email                String?
+  openingHours         String?
+  products             String?
+  ownerUserId          String?  // confirmed owner (OpsUser)
+  ownerPhoneNormalized String?
+  /// active | merged | hidden | suspended | closed_business | invalid_phone |
+  /// out_of_service | wrong_business_phone
+  status               String   @default("active")
+  canonicalListingId   String?  // set when status == merged
+  source               String   @default("daleely")
+  deletedAt            DateTime? // soft delete only — never hard delete
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@index([normalizedPhone])
+  @@index([status])
+}
+
+/// Sales pipeline lead. Auto-created for every eligible phone added by Admin.
+model OpsLead {
+  id               String   @id @default(cuid())
+  rawPhone         String
+  normalizedPhone  String
+  prefix           String? // 010 | 011 | 012 | 015 ...
+  listingId        String?
+  userId           String?
+  businessName     String   @default("")
+  customerName     String   @default("")
+  /// new | assigned | queued | calling | ringing | answered | busy | no_answer |
+  /// switched_off | invalid_number | out_of_service | callback | interested |
+  /// not_interested | whatsapp_followup | transferred_to_sales | linked |
+  /// closed_business | completed | failed
+  status           String   @default("new")
+  priority         String   @default("normal") // high | normal | low
+  assignedAgentId  String?
+  originalAgentId  String? // preserved when the AI Bot runs the lead
+  botStatus        String   @default("none") // none | queued | running | done | returned
+  botAddedById     String?
+  botAddedAt       DateTime?
+  source           String   @default("admin") // admin | website | whatsapp | import
+  campaign         String?
+  lastOutcome      String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([normalizedPhone])
+  @@index([assignedAgentId])
+  @@index([status])
+}
+
+/// Every call attempt (sales or AI) against a lead.
+model OpsCallAttempt {
+  id          String    @id @default(cuid())
+  leadId      String
+  agentType   String // sales_agent | ai_agent | system
+  agentId     String?
+  outcome     String
+  reason      String?
+  confidence  Int?
+  notes       String?
+  durationSec Int       @default(0)
+  startedAt   DateTime?
+  endedAt     DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([leadId])
+}
+
+model OpsFollowup {
+  id          String    @id @default(cuid())
+  leadId      String
+  scheduledAt DateTime
+  reason      String    @default("")
+  assigneeId  String?
+  priority    String    @default("normal")
+  /// scheduled | due | completed | missed | cancelled | rescheduled
+  status      String    @default("scheduled")
+  createdAt   DateTime  @default(now())
+  completedAt DateTime?
+
+  @@index([leadId])
+}
+
+/// AI Bot queue — lead enters WITHOUT losing its sales owner.
+model BotQueueItem {
+  id          String    @id @default(cuid())
+  leadId      String    @unique
+  /// queued | running | paused | done | failed | returned
+  status      String    @default("queued")
+  priority    Int       @default(5) // 1 = highest
+  attempts    Int       @default(0)
+  scheduledAt DateTime?
+  lastResult  String?
+  addedById   String?
+  addedAt     DateTime  @default(now())
+  startedAt   DateTime?
+  finishedAt  DateTime?
+}
+
+model WhatsAppThread {
+  id               String   @id @default(cuid())
+  leadId           String?
+  phoneNormalized  String
+  displayName      String   @default("")
+  listingId        String?
+  lastMessageAt    DateTime?
+  unreadCount      Int      @default(0)
+  createdAt        DateTime @default(now())
+
+  @@index([leadId])
+}
+
+model WhatsAppMessage {
+  id        String    @id @default(cuid())
+  threadId  String
+  direction String // out | in
+  body      String
+  template  String?
+  /// queued | sent | delivered | read | failed | received
+  status    String    @default("queued")
+  actorType String    @default("sales_agent") // sales_agent | ai_agent | customer | system
+  actorId   String?
+  sentAt    DateTime?
+  deliveredAt DateTime?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([threadId])
+}
+
+/// Unified per-lead timeline (never fragmented histories).
+model TimelineEvent {
+  id        String   @id @default(cuid())
+  leadId    String
+  type      String
+  /// admin | sales_agent | ai_agent | system | customer
+  actorType String   @default("system")
+  actorId   String?
+  actorName String?
+  title     String
+  data      String   @default("{}")
+  createdAt DateTime @default(now())
+
+  @@index([leadId])
+}
+
+/// Full audit trail — no silent destructive changes.
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorType  String // admin | sales_agent | ai_agent | system | customer
+  actorId    String?
+  action     String
+  entityType String
+  entityId   String?
+  oldValue   String   @default("{}")
+  newValue   String   @default("{}")
+  reason     String?
+  source     String?
+  metadata   String   @default("{}")
+  createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([action])
+}
+
+model OwnerLinkEvent {
+  id               String   @id @default(cuid())
+  listingId        String
+  userId           String?
+  phoneNormalized  String
+  method           String // auto | manual
+  confidence       Int?
+  reason           String?
+  actorType        String   @default("system")
+  actorId          String?
+  /// linked | rejected | pending_review
+  status           String   @default("linked")
+  createdAt        DateTime @default(now())
+
+  @@index([listingId])
+}
+
+/// Duplicate detection + merge workflow.
+model MergeJob {
+  id                 String    @id @default(cuid())
+  canonicalListingId String
+  duplicateListingId String
+  confidence         Int
+  reasons            String    @default("[]") // JSON [{code,label,score}]
+  /// pending_review | auto_merged | merged | rejected | manual_review
+  status             String    @default("pending_review")
+  fieldChanges       String    @default("[]") // JSON [{field, kept, from, action}]
+  reviewedById       String?
+  reviewedAt         DateTime?
+  createdAt          DateTime  @default(now())
+
+  @@index([status])
+}
+
+model OpsNotification {
+  id           String   @id @default(cuid())
+  targetUserId String?
+  targetPhone  String?
+  title        String
+  body         String
+  type         String   @default("info") // info | success | warning | error
+  leadId       String?
+  read         Boolean  @default(false)
+  createdAt    DateTime @default(now())
+}

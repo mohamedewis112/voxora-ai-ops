@@ -6,7 +6,7 @@
  * The unified lead sheet handles all lead-level actions.
  */
 import { useMemo, useState } from "react";
-import { Loader2, Plus, RefreshCcw, UserCheck } from "lucide-react";
+import { Loader2, RefreshCcw, UserCheck } from "lucide-react";
 import { toast } from "sonner";
 import { useI18n } from "@/lib/i18n";
 import { useUiStore } from "@/stores/ui-store";

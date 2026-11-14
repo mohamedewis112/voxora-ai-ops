@@ -91,6 +91,13 @@ export function useOps<T>(
     return () => clearInterval(id);
   }, [path, options?.pollMs, load]);
 
+  useEffect(() => {
+    if (!path) return;
+    return onOpsChanged(() => {
+      void load(true);
+    });
+  }, [path, load]);
+
   return { data, loading, error, refresh: () => load(true) };
 }
 

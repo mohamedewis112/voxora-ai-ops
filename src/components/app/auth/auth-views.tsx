@@ -73,15 +73,31 @@ export function LoginView() {
     try {
       if (process.env.NEXT_PUBLIC_DALEELY_ADAPTER === "supabase") {
         const res = await fetch("/api/auth/login", {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password }),
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          cache: "no-store",
+          body: JSON.stringify({ email: email.trim().toLowerCase(), password }),
         });
         const payload = await res.json();
         if (!res.ok || !payload.ok) throw new Error(payload.error || "login_failed");
-        login(payload.data);
+
+        const sessionRes = await fetch("/api/auth/session", {
+          credentials: "include",
+          cache: "no-store",
+        });
+        const sessionPayload = await sessionRes.json();
+        if (!sessionRes.ok || !sessionPayload.ok) throw new Error("session_failed");
+
+        login({
+          name: sessionPayload.data.name,
+          email: sessionPayload.data.email,
+          role: sessionPayload.data.role,
+        });
       } else {
         login({ email });
       }
+      if (typeof window !== "undefined") window.history.replaceState(null, "", "#sales");
       setView("sales");
       toast.success(t("toast.loginSuccess"));
     } catch (error) {
@@ -100,14 +116,14 @@ export function LoginView() {
             <Label htmlFor="email">{t("common.email")}</Label>
             <div className="relative">
               <Mail className="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-              <Input id="email" type="email" dir="ltr" value={email} onChange={(e) => setEmail(e.target.value)} className="ps-9" required />
+              <Input id="email" type="email" dir="ltr" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} className="ps-9" required />
             </div>
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="password">{t("common.password")}</Label>
             <div className="relative">
               <Lock className="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-              <Input id="password" type="password" dir="ltr" value={password} onChange={(e) => setPassword(e.target.value)} className="ps-9" required />
+              <Input id="password" type="password" dir="ltr" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} className="ps-9" required />
             </div>
           </div>
           <Button type="submit" className="w-full" disabled={loading}>

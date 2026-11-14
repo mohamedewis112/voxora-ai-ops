@@ -10,16 +10,11 @@ import { LoginView } from "./auth/auth-views";
 import { AccountView } from "./account-view";
 import { SalesWorkspaceView } from "./ops/sales-workspace-view";
 import { SalesFollowupsView } from "./ops/sales-followups-view";
-import { PipelineView } from "./ops/pipeline-view";
-import { UnclaimedView } from "./ops/unclaimed-view";
-import { MergeReviewView } from "./ops/merge-review-view";
-import { WhatsAppView } from "./ops/whatsapp-view";
+import { ManagerDashboardView } from "./ops/manager-dashboard-view";
+import { ManagerFollowupsView } from "./ops/manager-followups-view";
 
 const SALES_VIEWS: ViewKey[] = ["sales", "followups", "account"];
-const ADMIN_VIEWS: ViewKey[] = [
-  "sales", "pipeline", "unclaimed", "merge-review", "whatsapp",
-  "account",
-];
+const ADMIN_VIEWS: ViewKey[] = ["dashboard", "sales", "followups", "account"];
 
 function Splash() {
   return (
@@ -47,7 +42,7 @@ export function SmartCallApp() {
           const payload = await res.json();
           if (!cancelled && res.ok && payload.ok) {
             login({ name: payload.data.name, email: payload.data.email, role: payload.data.role });
-            if (payload.data.role === "sales_agent") setView("sales");
+            setView(payload.data.role === "sales_agent" ? "sales" : "dashboard");
           } else if (!cancelled && !useUiStore.getState().authed) {
             logout();
           }
@@ -106,17 +101,8 @@ export function SmartCallApp() {
 
 function renderView(view: ViewKey, isSales: boolean) {
   if (view === "account") return <AccountView />;
-  if (view === "followups") return isSales ? <SalesFollowupsView /> : <SalesWorkspaceView />;
-  if (view === "whatsapp") return <WhatsAppView />;
+  if (view === "dashboard" && !isSales) return <ManagerDashboardView />;
+  if (view === "followups") return isSales ? <SalesFollowupsView /> : <ManagerFollowupsView />;
   if (view === "sales") return <SalesWorkspaceView />;
-
-  if (!isSales) {
-    switch (view) {
-      case "pipeline": return <PipelineView />;
-      case "unclaimed": return <UnclaimedView />;
-      case "merge-review": return <MergeReviewView />;
-      default: return <SalesWorkspaceView />;
-    }
-  }
-  return <SalesWorkspaceView />;
+  return isSales ? <SalesWorkspaceView /> : <ManagerDashboardView />;
 }
